@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+# Base SQLite de dev/local et secrets d'environnement
+*.db
+.env
