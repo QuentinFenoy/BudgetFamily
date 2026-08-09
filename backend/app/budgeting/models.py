@@ -1,44 +1,48 @@
-"""Modèles de données pour la gestion des objectifs d'épargne."""
+"""Modèles de données pour le module de répartition budgétaire."""
 
 from dataclasses import dataclass, field
+from enum import Enum
+
+
+class Objectif(str, Enum):
+    DESENDETTEMENT = "desendettement"
+    MATELAS_SECURITE = "matelas_securite"
+    RETRAITE_LONG_TERME = "retraite_long_terme"
+    MOYEN_TERME = "moyen_terme"
+    AUCUN = "aucun"
+
+
+class Priorite(str, Enum):
+    ESSENTIEL = "essentiel"          # jamais réduit automatiquement
+    SEMI_ESSENTIEL = "semi_essentiel"  # réductible jusqu'à -30%
+    DISCRETIONNAIRE = "discretionnaire"  # réductible jusqu'à 0
 
 
 @dataclass
-class ObjectifEpargne:
-    """Un objectif d'épargne déclaré par l'utilisateur (ex: fonds d'urgence, apport immobilier)."""
-    id: str
-    nom: str
-    montant_cible: float
-    montant_actuel: float = 0.0
-    priorite: int = 1  # 1 = le plus prioritaire, utilisé par la méthode "cascade"
+class ProfilFoyer:
+    """Situation déclarée à l'onboarding, nécessaire au calcul."""
+    revenus_total: float          # revenus fixes + variables moyens, mensuels
+    charges_fixes_total: float    # loyer/crédit, assurances, abonnements, etc.
+    nb_personnes: int             # nombre total d'habitants du foyer (adultes + enfants)
+    nb_enfants: int = 0
+    objectif: Objectif = Objectif.AUCUN
+    matelas_securite_atteint: bool = False  # True si >= 3 mois de charges fixes déjà épargnés
 
     def __post_init__(self):
-        if self.montant_cible <= 0:
-            raise ValueError("montant_cible doit être > 0")
-        if self.montant_actuel < 0:
-            raise ValueError("montant_actuel doit être >= 0")
-        if self.priorite < 1:
-            raise ValueError("priorite doit être >= 1")
-
-    @property
-    def montant_restant(self) -> float:
-        return max(round(self.montant_cible - self.montant_actuel, 2), 0.0)
-
-    @property
-    def est_atteint(self) -> bool:
-        return self.montant_actuel >= self.montant_cible
+        if self.nb_personnes < 1:
+            raise ValueError("nb_personnes doit être >= 1")
+        if self.nb_enfants < 0 or self.nb_enfants > self.nb_personnes:
+            raise ValueError("nb_enfants incohérent avec nb_personnes")
 
 
 @dataclass
-class AllocationObjectif:
-    """Résultat de la répartition pour un objectif donné, pour le mois courant."""
-    objectif_id: str
-    montant_alloue_ce_mois: float
-    mois_restants_estimes: float | None  # None si l'objectif ne recevra jamais assez pour être atteint
-
-
-@dataclass
-class ResultatRepartitionEpargne:
-    epargne_disponible: float
-    allocations: list[AllocationObjectif] = field(default_factory=list)
-    epargne_non_allouee: float = 0.0  # reliquat si tous les objectifs actifs sont déjà couverts
+class ResultatBudget:
+    """Sortie du calcul de répartition."""
+    disponible: float
+    disponible_par_hab: float
+    montants_categories: dict = field(default_factory=dict)
+    epargne_potentielle: float = 0.0
+    epargne_reference_taux: float = 0.0
+    epargne_reference_montant: float = 0.0
+    ajustement_applique: bool = False
+    ecart_non_couvert: float = 0.0  # > 0 si la cible forcée n'est pas atteignable

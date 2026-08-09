@@ -1,118 +1,158 @@
-"""Moteur de répartition de l'épargne disponible entre plusieurs objectifs.
+"""Moteur de calcul de la répartition budgétaire.
 
-Ce module est volontairement découplé de app.budgeting : il prend en entrée un montant
-d'épargne disponible (typiquement Épargne_potentielle calculée par le module budgeting),
-sans dépendre directement de son moteur de calcul.
+Implémente le modèle décrit dans le document d'architecture (section 10.4) :
+1. Disponible = Revenus - Charges fixes
+2. Catégories calculées directement sur le Disponible (plafonnées ou dégressives)
+3. Épargne_potentielle = résidu, comparée à un taux de référence
+4. Ajustement forcé par priorité si une cible d'épargne supérieure est demandée
 """
 
-import math
-
-from .models import ObjectifEpargne, AllocationObjectif, ResultatRepartitionEpargne
-
-
-def _mois_restants(objectif: ObjectifEpargne, montant_mensuel_alloue: float) -> float | None:
-    if objectif.est_atteint:
-        return 0.0
-    if montant_mensuel_alloue <= 0:
-        return None
-    return math.ceil(objectif.montant_restant / montant_mensuel_alloue)
-
-
-def repartir_epargne_cascade(
-    objectifs: list[ObjectifEpargne], epargne_disponible: float
-) -> ResultatRepartitionEpargne:
-    """Méthode 'cascade' : remplit les objectifs par ordre de priorité (1 = le plus
-    prioritaire d'abord), jusqu'à épuisement de l'épargne disponible du mois.
-    """
-    objectifs_tries = sorted(objectifs, key=lambda o: o.priorite)
-    reste = round(epargne_disponible, 2)
-    allocations = []
-
-    for objectif in objectifs_tries:
-        montant_alloue = round(max(min(reste, objectif.montant_restant), 0.0), 2)
-        allocations.append(
-            AllocationObjectif(
-                objectif_id=objectif.id,
-                montant_alloue_ce_mois=montant_alloue,
-                mois_restants_estimes=_mois_restants(objectif, montant_alloue),
-            )
-        )
-        reste = round(reste - montant_alloue, 2)
-
-    return ResultatRepartitionEpargne(
-        epargne_disponible=epargne_disponible,
-        allocations=allocations,
-        epargne_non_allouee=max(reste, 0.0),
-    )
+from .models import ProfilFoyer, ResultatBudget, Priorite
+from .rules import (
+    CATEGORIES_PLAFONNEES,
+    CATEGORIES_ELASTIQUES,
+    SEUIL_DEGRESSIVITE_PAR_HAB,
+    TRANCHES_EPARGNE_REFERENCE,
+    MODIFICATEURS_OBJECTIF,
+    TAUX_EPARGNE_MIN,
+    TAUX_EPARGNE_MAX,
+    REDUCTION_MAX_SEMI_ESSENTIEL,
+)
 
 
-def repartir_epargne_proportionnelle(
-    objectifs: list[ObjectifEpargne], epargne_disponible: float
-) -> ResultatRepartitionEpargne:
-    """Méthode 'proportionnelle' : répartit l'épargne disponible au prorata du montant
-    restant de chaque objectif non encore atteint, sans jamais dépasser son besoin réel.
+def compute_disponible(profil: ProfilFoyer) -> float:
+    disponible = profil.revenus_total - profil.charges_fixes_total
+    return max(disponible, 0.0)
 
-    Limitation connue : une seule passe de redistribution du surplus est effectuée. Dans
-    de rares cas avec plusieurs objectifs proches simultanément de leur saturation, un
-    petit reliquat peut rester non alloué (visible dans epargne_non_allouee) plutôt que
-    d'être redistribué de façon parfaitement itérative — jugé suffisant pour le MVP.
-    """
-    objectifs_actifs = [o for o in objectifs if not o.est_atteint]
 
-    if not objectifs_actifs:
-        allocations = [
-            AllocationObjectif(objectif_id=o.id, montant_alloue_ce_mois=0.0, mois_restants_estimes=0.0)
-            for o in objectifs
-        ]
-        return ResultatRepartitionEpargne(
-            epargne_disponible=epargne_disponible, allocations=allocations, epargne_non_allouee=epargne_disponible
-        )
+def compute_disponible_par_hab(disponible: float, profil: ProfilFoyer) -> float:
+    return disponible / profil.nb_personnes
 
-    total_restant = sum(o.montant_restant for o in objectifs_actifs)
+
+def _montant_categorie_plafonnee(nom: str, cfg: dict, disponible: float, profil: ProfilFoyer) -> float:
+    montant_pondere = cfg["poids"] * disponible
+    if "plafond_par_enfant" in cfg:
+        if profil.nb_enfants == 0:
+            return 0.0
+        plafond = cfg["plafond_par_enfant"] * profil.nb_enfants
+    else:
+        plafond = cfg["plafond_par_hab"] * profil.nb_personnes
+    return min(montant_pondere, plafond)
+
+
+def _montant_categorie_elastique(cfg: dict, disponible_par_hab: float, profil: ProfilFoyer) -> float:
+    part_pleine = min(disponible_par_hab, SEUIL_DEGRESSIVITE_PAR_HAB)
+    part_reduite = max(disponible_par_hab - SEUIL_DEGRESSIVITE_PAR_HAB, 0.0)
+    montant_par_hab = cfg["poids_plein"] * part_pleine + cfg["poids_reduit"] * part_reduite
+    return montant_par_hab * profil.nb_personnes
+
+
+def compute_montants_categories(disponible: float, disponible_par_hab: float, profil: ProfilFoyer) -> dict:
     montants = {}
-    for o in objectifs_actifs:
-        part = o.montant_restant / total_restant if total_restant > 0 else 0.0
-        montants[o.id] = min(part * epargne_disponible, o.montant_restant)
+    for nom, cfg in CATEGORIES_PLAFONNEES.items():
+        montants[nom] = round(_montant_categorie_plafonnee(nom, cfg, disponible, profil), 2)
+    for nom, cfg in CATEGORIES_ELASTIQUES.items():
+        montants[nom] = round(_montant_categorie_elastique(cfg, disponible_par_hab, profil), 2)
+    return montants
 
-    total_alloue = sum(montants.values())
-    surplus = epargne_disponible - total_alloue
-    if surplus > 0.01:
-        objectifs_non_satures = [o for o in objectifs_actifs if montants[o.id] < o.montant_restant - 0.01]
-        besoin_non_sature = sum(o.montant_restant - montants[o.id] for o in objectifs_non_satures)
-        if besoin_non_sature > 0:
-            for o in objectifs_non_satures:
-                part = (o.montant_restant - montants[o.id]) / besoin_non_sature
-                montants[o.id] = min(montants[o.id] + part * surplus, o.montant_restant)
 
-    allocations = []
-    for o in objectifs:
-        montant_alloue = round(montants.get(o.id, 0.0), 2)
-        allocations.append(
-            AllocationObjectif(
-                objectif_id=o.id,
-                montant_alloue_ce_mois=montant_alloue,
-                mois_restants_estimes=_mois_restants(o, montant_alloue),
-            )
+def compute_epargne_potentielle(disponible: float, montants_categories: dict) -> float:
+    return round(disponible - sum(montants_categories.values()), 2)
+
+
+def _priorite_categorie(nom: str) -> Priorite:
+    if nom in CATEGORIES_PLAFONNEES:
+        return CATEGORIES_PLAFONNEES[nom]["priorite"]
+    return CATEGORIES_ELASTIQUES[nom]["priorite"]
+
+
+def compute_taux_epargne_reference(disponible_par_hab: float, profil: ProfilFoyer) -> float:
+    base = None
+    for borne_min, borne_max, taux in TRANCHES_EPARGNE_REFERENCE:
+        if borne_min <= disponible_par_hab < borne_max:
+            base = taux
+            break
+    if base is None:
+        base = TRANCHES_EPARGNE_REFERENCE[-1][2]
+
+    modificateur = MODIFICATEURS_OBJECTIF.get(profil.objectif, 0.0)
+    taux = base + modificateur
+
+    # matelas de sécurité : le bonus ne s'applique que s'il n'est pas déjà atteint
+    if profil.objectif.value == "matelas_securite" and profil.matelas_securite_atteint:
+        taux = base
+
+    return max(TAUX_EPARGNE_MIN, min(TAUX_EPARGNE_MAX, taux))
+
+
+def forcer_epargne_cible(
+    montants_categories: dict,
+    disponible: float,
+    epargne_potentielle: float,
+    epargne_cible_forcee: float,
+) -> tuple[dict, float]:
+    """Réduit les catégories par ordre de priorité pour atteindre une cible d'épargne
+    supérieure à l'épargne potentielle naturelle. Retourne (nouveaux montants, écart non couvert).
+    """
+    ecart = round(epargne_cible_forcee - epargne_potentielle, 2)
+    if ecart <= 0:
+        return dict(montants_categories), 0.0
+
+    nouveaux = dict(montants_categories)
+
+    # Niveau 3 : discrétionnaire, réductible jusqu'à 0
+    categories_niv3 = [n for n in nouveaux if _priorite_categorie(n) == Priorite.DISCRETIONNAIRE]
+    total_niv3 = sum(nouveaux[n] for n in categories_niv3)
+    if total_niv3 > 0 and ecart > 0:
+        reduction = min(ecart, total_niv3)
+        for n in categories_niv3:
+            part = nouveaux[n] / total_niv3 if total_niv3 else 0
+            nouveaux[n] = round(nouveaux[n] - reduction * part, 2)
+        ecart = round(ecart - reduction, 2)
+
+    # Niveau 2 : semi-essentiel, réductible jusqu'à -30% du montant initial
+    if ecart > 0:
+        categories_niv2 = [n for n in montants_categories if _priorite_categorie(n) == Priorite.SEMI_ESSENTIEL]
+        reduction_max_par_cat = {n: montants_categories[n] * REDUCTION_MAX_SEMI_ESSENTIEL for n in categories_niv2}
+        total_reduction_max = sum(reduction_max_par_cat.values())
+        if total_reduction_max > 0:
+            reduction = min(ecart, total_reduction_max)
+            for n in categories_niv2:
+                part = reduction_max_par_cat[n] / total_reduction_max if total_reduction_max else 0
+                nouveaux[n] = round(nouveaux[n] - reduction * part, 2)
+            ecart = round(ecart - reduction, 2)
+
+    # Niveau 1 : jamais touché — l'écart résiduel est retourné tel quel
+    return nouveaux, max(ecart, 0.0)
+
+
+def calculer_budget(profil: ProfilFoyer, epargne_cible_forcee: float | None = None) -> ResultatBudget:
+    """Point d'entrée principal : calcule la répartition complète pour un profil donné."""
+    disponible = compute_disponible(profil)
+    disponible_par_hab = compute_disponible_par_hab(disponible, profil)
+
+    montants = compute_montants_categories(disponible, disponible_par_hab, profil)
+    epargne_potentielle = compute_epargne_potentielle(disponible, montants)
+
+    taux_reference = compute_taux_epargne_reference(disponible_par_hab, profil)
+    montant_reference = round(taux_reference * disponible, 2)
+
+    ajustement_applique = False
+    ecart_non_couvert = 0.0
+    if epargne_cible_forcee is not None and epargne_cible_forcee > epargne_potentielle:
+        montants, ecart_non_couvert = forcer_epargne_cible(
+            montants, disponible, epargne_potentielle, epargne_cible_forcee
         )
+        epargne_potentielle = compute_epargne_potentielle(disponible, montants)
+        ajustement_applique = True
 
-    total_alloue_final = round(sum(montants.values()), 2)
-    return ResultatRepartitionEpargne(
-        epargne_disponible=epargne_disponible,
-        allocations=allocations,
-        epargne_non_allouee=round(max(epargne_disponible - total_alloue_final, 0.0), 2),
+    return ResultatBudget(
+        disponible=round(disponible, 2),
+        disponible_par_hab=round(disponible_par_hab, 2),
+        montants_categories=montants,
+        epargne_potentielle=epargne_potentielle,
+        epargne_reference_taux=round(taux_reference, 4),
+        epargne_reference_montant=montant_reference,
+        ajustement_applique=ajustement_applique,
+        ecart_non_couvert=ecart_non_couvert,
     )
-
-
-METHODES_REPARTITION = {
-    "cascade": repartir_epargne_cascade,
-    "proportionnelle": repartir_epargne_proportionnelle,
-}
-
-
-def repartir_epargne(
-    objectifs: list[ObjectifEpargne], epargne_disponible: float, methode: str = "cascade"
-) -> ResultatRepartitionEpargne:
-    """Point d'entrée principal du module."""
-    if methode not in METHODES_REPARTITION:
-        raise ValueError(f"Méthode inconnue : {methode!r}. Attendu : {list(METHODES_REPARTITION)}")
-    return METHODES_REPARTITION[methode](objectifs, epargne_disponible)

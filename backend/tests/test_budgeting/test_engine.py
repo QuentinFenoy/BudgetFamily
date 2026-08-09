@@ -1,106 +1,124 @@
 import math
 
-from app.savings.models import ObjectifEpargne
-from app.savings.engine import repartir_epargne_cascade, repartir_epargne_proportionnelle, repartir_epargne
+from app.budgeting.models import ProfilFoyer, Objectif
+from app.budgeting.engine import calculer_budget
 
 
-def _get_allocation(resultat, objectif_id):
-    return next(a for a in resultat.allocations if a.objectif_id == objectif_id)
+def test_celibataire_haut_revenu_logement_paye():
+    """Célibataire, 10 000€/mois, charges fixes quasi nulles -> tranche >5000€/hab."""
+    profil = ProfilFoyer(
+        revenus_total=10000,
+        charges_fixes_total=0,
+        nb_personnes=1,
+        nb_enfants=0,
+        objectif=Objectif.RETRAITE_LONG_TERME,
+    )
+    resultat = calculer_budget(profil)
+
+    assert resultat.disponible == 10000
+    # catégories plafonnées : 450+250+120+100 = 920 (enfants = 0)
+    assert resultat.montants_categories["alimentation"] == 450.0
+    assert resultat.montants_categories["transport"] == 250.0
+    assert resultat.montants_categories["enfants"] == 0.0
+    # loisirs dégressif : 15%*3000 + 7%*7000 = 450+490 = 940
+    assert math.isclose(resultat.montants_categories["loisirs"], 940.0, abs_tol=0.01)
+    # imprevus dégressif : 10%*3000 + 4%*7000 = 300+280 = 580
+    assert math.isclose(resultat.montants_categories["imprevus"], 580.0, abs_tol=0.01)
+    # épargne potentielle largement > 50%
+    assert resultat.epargne_potentielle > 5000
+    assert resultat.epargne_potentielle / resultat.disponible > 0.7
+    # taux de référence : base 50% (tranche >5000) + 5pts (retraite) = 55%
+    assert math.isclose(resultat.epargne_reference_taux, 0.55, abs_tol=0.001)
 
 
-def test_cascade_priorite_1_rempli_avant_priorite_2():
-    objectifs = [
-        ObjectifEpargne(id="urgence", nom="Fonds urgence", montant_cible=3000, montant_actuel=2800, priorite=1),
-        ObjectifEpargne(id="voyage", nom="Voyage", montant_cible=2000, montant_actuel=0, priorite=2),
-    ]
-    resultat = repartir_epargne_cascade(objectifs, epargne_disponible=500)
+def test_famille_revenu_moyen():
+    """Couple + 2 enfants, revenu moyen -> tranche 1000-3000€/hab."""
+    profil = ProfilFoyer(
+        revenus_total=4500,
+        charges_fixes_total=1500,  # loyer/crédit + assurances
+        nb_personnes=4,
+        nb_enfants=2,
+        objectif=Objectif.AUCUN,
+    )
+    resultat = calculer_budget(profil)
 
-    # urgence a besoin de 200 -> reçoit exactement 200, le reste (300) va au voyage
-    assert _get_allocation(resultat, "urgence").montant_alloue_ce_mois == 200.0
-    assert _get_allocation(resultat, "urgence").mois_restants_estimes == 1
-    assert _get_allocation(resultat, "voyage").montant_alloue_ce_mois == 300.0
-    assert resultat.epargne_non_allouee == 0.0
-
-
-def test_cascade_epargne_insuffisante_pour_second_objectif():
-    objectifs = [
-        ObjectifEpargne(id="a", nom="A", montant_cible=1000, montant_actuel=0, priorite=1),
-        ObjectifEpargne(id="b", nom="B", montant_cible=1000, montant_actuel=0, priorite=2),
-    ]
-    resultat = repartir_epargne_cascade(objectifs, epargne_disponible=300)
-
-    assert _get_allocation(resultat, "a").montant_alloue_ce_mois == 300.0
-    assert _get_allocation(resultat, "b").montant_alloue_ce_mois == 0.0
-    # b ne reçoit rien ce mois -> mois_restants_estimes doit être None (pas de division par 0)
-    assert _get_allocation(resultat, "b").mois_restants_estimes is None
+    assert resultat.disponible == 3000
+    assert resultat.disponible_par_hab == 750.0  # tranche 500-1000€/hab
+    # enfants : 12%*3000=360, plafond 200*2=400 -> 360 (pas plafonné)
+    assert resultat.montants_categories["enfants"] == 360.0
+    # aucune catégorie plafonnée ne doit dépasser son plafond
+    assert resultat.montants_categories["alimentation"] <= 450.0 * 4
+    # somme des montants + épargne doit reconstituer le disponible
+    total = sum(resultat.montants_categories.values()) + resultat.epargne_potentielle
+    assert math.isclose(total, resultat.disponible, abs_tol=0.01)
 
 
-def test_cascade_tous_objectifs_atteints_epargne_non_allouee():
-    objectifs = [ObjectifEpargne(id="a", nom="A", montant_cible=100, montant_actuel=100, priorite=1)]
-    resultat = repartir_epargne_cascade(objectifs, epargne_disponible=500)
+def test_revenu_tres_faible_desendettement():
+    """Personne seule sous le seuil, objectif désendettement -> taux plancher."""
+    profil = ProfilFoyer(
+        revenus_total=1400,
+        charges_fixes_total=1100,
+        nb_personnes=1,
+        nb_enfants=0,
+        objectif=Objectif.DESENDETTEMENT,
+    )
+    resultat = calculer_budget(profil)
 
-    assert _get_allocation(resultat, "a").montant_alloue_ce_mois == 0.0
-    assert _get_allocation(resultat, "a").mois_restants_estimes == 0.0
-    assert resultat.epargne_non_allouee == 500.0
-
-
-def test_proportionnelle_repartit_au_prorata_du_restant():
-    objectifs = [
-        ObjectifEpargne(id="a", nom="A", montant_cible=1000, montant_actuel=0, priorite=1),  # restant 1000
-        ObjectifEpargne(id="b", nom="B", montant_cible=3000, montant_actuel=0, priorite=2),  # restant 3000
-    ]
-    resultat = repartir_epargne_proportionnelle(objectifs, epargne_disponible=400)
-
-    # a doit recevoir 1/4 (1000/4000), b 3/4 (3000/4000)
-    assert math.isclose(_get_allocation(resultat, "a").montant_alloue_ce_mois, 100.0, abs_tol=0.01)
-    assert math.isclose(_get_allocation(resultat, "b").montant_alloue_ce_mois, 300.0, abs_tol=0.01)
-    assert resultat.epargne_non_allouee == 0.0
+    assert resultat.disponible == 300
+    assert resultat.disponible_par_hab == 300.0  # tranche <500€/hab -> base 5%
+    # 5% - 5pts (désendettement) = 0%, mais borné au plancher 5%
+    assert resultat.epargne_reference_taux == 0.05
 
 
-def test_proportionnelle_plafonne_quand_epargne_depasse_le_besoin_total():
-    """Avec une pondération strictement proportionnelle au montant restant, un objectif ne
-    peut être plafonné individuellement que si TOUS les objectifs le sont simultanément
-    (le ratio épargne/besoin_total s'applique uniformément). Le cas réel de plafonnement
-    est donc : l'épargne disponible dépasse la somme des besoins restants.
-    """
-    objectifs = [
-        ObjectifEpargne(id="petit", nom="Petit", montant_cible=100, montant_actuel=90, priorite=1),  # restant 10
-        ObjectifEpargne(id="grand", nom="Grand", montant_cible=5000, montant_actuel=0, priorite=2),  # restant 5000
-    ]
-    resultat = repartir_epargne_proportionnelle(objectifs, epargne_disponible=6000)  # > 5010 (besoin total)
+def test_ajustement_force_reduit_discretionnaire_avant_semi_essentiel():
+    profil = ProfilFoyer(
+        revenus_total=3500,
+        charges_fixes_total=1000,
+        nb_personnes=2,
+        nb_enfants=0,
+        objectif=Objectif.AUCUN,
+    )
+    resultat_libre = calculer_budget(profil)
+    cible_forcee = resultat_libre.epargne_potentielle + 200  # +200€ au-delà du potentiel naturel
 
-    # les deux objectifs doivent être exactement comblés, jamais dépassés
-    assert _get_allocation(resultat, "petit").montant_alloue_ce_mois == 10.0
-    assert _get_allocation(resultat, "grand").montant_alloue_ce_mois == 5000.0
-    # le surplus (6000 - 5010) doit apparaître comme non alloué, pas perdu ni sur-attribué
-    assert math.isclose(resultat.epargne_non_allouee, 990.0, abs_tol=0.01)
+    resultat_force = calculer_budget(profil, epargne_cible_forcee=cible_forcee)
 
-
-def test_proportionnelle_repartition_fine_sous_le_besoin_total():
-    """En dessous du besoin total, chaque objectif reçoit exactement sa part au prorata
-    de son propre besoin, sans plafonnement ni redistribution nécessaire."""
-    objectifs = [
-        ObjectifEpargne(id="petit", nom="Petit", montant_cible=100, montant_actuel=90, priorite=1),  # restant 10
-        ObjectifEpargne(id="grand", nom="Grand", montant_cible=5000, montant_actuel=0, priorite=2),  # restant 5000
-    ]
-    resultat = repartir_epargne_proportionnelle(objectifs, epargne_disponible=1000)  # < 5010
-
-    # 10/5010 et 5000/5010 de 1000€
-    assert math.isclose(_get_allocation(resultat, "petit").montant_alloue_ce_mois, 1.996, abs_tol=0.01)
-    assert math.isclose(_get_allocation(resultat, "grand").montant_alloue_ce_mois, 998.004, abs_tol=0.01)
-    assert resultat.epargne_non_allouee == 0.0
+    assert resultat_force.ajustement_applique is True
+    # essentiels inchangés
+    assert resultat_force.montants_categories["alimentation"] == resultat_libre.montants_categories["alimentation"]
+    assert resultat_force.montants_categories["sante"] == resultat_libre.montants_categories["sante"]
+    # discrétionnaires réduits
+    assert resultat_force.montants_categories["loisirs"] < resultat_libre.montants_categories["loisirs"]
+    assert resultat_force.montants_categories["imprevus"] < resultat_libre.montants_categories["imprevus"]
+    # épargne effective proche de la cible (à l'écart non couvert près)
+    assert math.isclose(
+        resultat_force.epargne_potentielle + resultat_force.ecart_non_couvert,
+        cible_forcee,
+        abs_tol=0.5,
+    )
 
 
-def test_repartir_epargne_dispatch_par_methode():
-    objectifs = [ObjectifEpargne(id="a", nom="A", montant_cible=1000, priorite=1)]
-    resultat = repartir_epargne(objectifs, 200, methode="cascade")
-    assert _get_allocation(resultat, "a").montant_alloue_ce_mois == 200.0
+def test_ajustement_force_signale_ecart_non_couvert_si_cible_irrealiste():
+    profil = ProfilFoyer(
+        revenus_total=1600,
+        charges_fixes_total=1000,
+        nb_personnes=1,
+        nb_enfants=0,
+        objectif=Objectif.AUCUN,
+    )
+    resultat_libre = calculer_budget(profil)
+    # cible délirante : demander plus que le disponible total
+    resultat_force = calculer_budget(profil, epargne_cible_forcee=resultat_libre.disponible * 2)
+
+    assert resultat_force.ecart_non_couvert > 0
+    # les essentiels ne sont jamais réduits, même dans ce cas extrême
+    assert resultat_force.montants_categories["alimentation"] == resultat_libre.montants_categories["alimentation"]
 
 
-def test_repartir_epargne_methode_inconnue_leve_erreur():
-    objectifs = [ObjectifEpargne(id="a", nom="A", montant_cible=1000, priorite=1)]
-    try:
-        repartir_epargne(objectifs, 200, methode="au_hasard")
-        assert False, "devrait lever une ValueError"
-    except ValueError:
-        pass
+def test_override_categorie_a_zero_nest_pas_gere_par_le_moteur_de_base():
+    """Le moteur ne gère pas encore l'override manuel utilisateur (ex: transport=0
+    car pris en charge par l'employeur) -> à implémenter dans la couche API (Phase suivante).
+    Ce test documente explicitement la limite actuelle."""
+    profil = ProfilFoyer(revenus_total=3000, charges_fixes_total=1000, nb_personnes=1)
+    resultat = calculer_budget(profil)
+    assert resultat.montants_categories["transport"] > 0
