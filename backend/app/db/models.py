@@ -19,7 +19,7 @@ Choix assumés pour le MVP :
 from datetime import date, datetime, timezone
 from enum import Enum
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import JSON, Date, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -69,6 +69,9 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     subscriptions: Mapped[list["Subscription"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    allocation_simulations: Mapped[list["AllocationSimulation"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -175,3 +178,41 @@ class Subscription(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="subscriptions")
+
+
+class AllocationSimulation(Base):
+    """Historique des simulations d'allocation de portefeuille (module app.portfolio).
+
+    Chaque appel réussi à GET /v1/portfolio/allocation enregistre un instantané : la
+    réponse est déjà entièrement calculée par app.portfolio.allocator au moment de la
+    sauvegarde, donc `allocation_json` stocke directement les lignes telles que
+    renvoyées à l'utilisateur (classes génériques uniquement — jamais de ticker, cf.
+    doc d'architecture section 8, invariant déjà vérifié côté API).
+
+    `goal_id` est volontairement absent pour l'instant : SavingsGoal (app.savings) est
+    aujourd'hui un moteur de calcul pur, sans persistance en base. Le lien pourra être
+    ajouté (FK nullable) le jour où les objectifs d'épargne seront eux-mêmes persistés,
+    sans migration destructive puisqu'il s'agirait d'un ajout de colonne nullable.
+    """
+
+    __tablename__ = "allocation_simulations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    methode: Mapped[str] = mapped_column(String(10), nullable=False)  # "hrp" | "erc"
+    montant: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    part_croissance: Mapped[float] = mapped_column(Float, nullable=False)
+    part_defensive: Mapped[float] = mapped_column(Float, nullable=False)
+    rendement_annuel_espere: Mapped[float] = mapped_column(Float, nullable=False)
+    volatilite_annuelle_estimee: Mapped[float] = mapped_column(Float, nullable=False)
+    ratio_sharpe_estime: Mapped[float] = mapped_column(Float, nullable=False)
+    source_donnees: Mapped[str] = mapped_column(String(60), nullable=False)
+
+    # Liste des lignes d'allocation (classe, categorie, part, montant), telle que
+    # renvoyée par l'API — cf. portfolio.schemas.LigneAllocationResponse.
+    allocation_json: Mapped[list] = mapped_column(JSON, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    user: Mapped["User"] = relationship(back_populates="allocation_simulations")

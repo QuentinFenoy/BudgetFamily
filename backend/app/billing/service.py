@@ -31,7 +31,7 @@ def get_billing_status(db: Session, user: User) -> BillingStatusResponse:
     derniere = db.scalar(
         select(Subscription)
         .where(Subscription.user_id == user.id)
-        .order_by(Subscription.updated_at.desc())
+        .order_by(Subscription.updated_at.desc(), Subscription.id.desc())
         .limit(1)
     )
     return BillingStatusResponse(

@@ -4,6 +4,8 @@ Contrat public : uniquement des classes d'actifs génériques, jamais d'instrume
 nominatif (cf. doc d'architecture, section 8). Champs d'avertissement obligatoires.
 """
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -32,3 +34,26 @@ class PortfolioAllocationResponse(BaseModel):
     source_donnees: str
     hypotheses: str
     avertissement: str
+
+
+class AllocationSimulationSummary(BaseModel):
+    """Ligne d'historique — sans le détail par classe, pour une liste compacte."""
+
+    model_config = {"from_attributes": True}
+
+    id: int
+    methode: str
+    montant: float | None
+    part_croissance: float
+    part_defensive: float
+    rendement_annuel_espere: float
+    volatilite_annuelle_estimee: float
+    ratio_sharpe_estime: float
+    source_donnees: str
+    created_at: datetime
+
+
+class AllocationSimulationDetail(AllocationSimulationSummary):
+    """Simulation complète, avec le détail par classe d'actifs."""
+
+    allocation: list[LigneAllocationResponse]
