@@ -34,6 +34,12 @@ class SubscriptionTier(str, Enum):
     PREMIUM = "premium"
 
 
+class SubscriptionStatus(str, Enum):
+    ACTIVE = "active"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+
+
 class IncomeType(str, Enum):
     FIXE = "fixe"
     VARIABLE = "variable"
@@ -60,6 +66,9 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     variable_categories: Mapped[list["VariableExpenseCategory"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    subscriptions: Mapped[list["Subscription"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -141,3 +150,28 @@ class ExpenseEntry(Base):
     date_operation: Mapped[date] = mapped_column(Date, default=lambda: _utcnow().date(), nullable=False)
 
     categorie: Mapped["VariableExpenseCategory"] = relationship(back_populates="entries")
+
+
+class Subscription(Base):
+    """Historique des abonnements d'un utilisateur (une ligne par période d'abonnement).
+
+    `User.subscription_tier` reste la source rapide d'accès pour les vérifications de
+    palier ailleurs dans le code (ex. app.reports.service) ; cette table sert d'historique
+    et de trace des événements reçus du fournisseur de paiement (webhook).
+    """
+
+    __tablename__ = "subscriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    tier: Mapped[str] = mapped_column(String(20), nullable=False)  # SubscriptionTier
+    statut: Mapped[str] = mapped_column(String(20), nullable=False)  # SubscriptionStatus
+    provider: Mapped[str] = mapped_column(String(30), nullable=False)  # "revenuecat" | "stripe" | "manual"
+    provider_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    date_debut: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    date_fin: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="subscriptions")
