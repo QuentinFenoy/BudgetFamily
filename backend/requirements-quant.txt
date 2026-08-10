@@ -1,0 +1,7 @@
+# Dépendances SUPPLÉMENTAIRES du script hors-ligne de rafraîchissement des
+# statistiques de marché (scripts/refresh_asset_class_stats.py) UNIQUEMENT.
+# Volontairement hors de requirements.txt : ni l'API ni la CI n'en ont besoin.
+# Installer avec :  pip install -r requirements.txt -r requirements-quant.txt
+-r requirements.txt
+scikit-learn==1.6.1
+yfinance==0.2.51
