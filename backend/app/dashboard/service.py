@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.budgeting.engine import calculer_budget
-from app.budgeting.models import Objectif, ProfilFoyer
+from app.budgeting.models import Objectif, ProfilFoyer, ResultatBudget
 from app.dashboard.schemas import CategorieBudgetStatus, DashboardResponse
 from app.db.models import ExpenseEntry, FixedExpense, Income, Profile, User, VariableExpenseCategory
 
@@ -42,7 +42,15 @@ def _bornes_mois(mois: str | None) -> tuple[date, date, str]:
     return debut, fin_exclue, f"{annee:04d}-{mois_num:02d}"
 
 
-def get_dashboard(db: Session, user: User, mois: str | None = None) -> DashboardResponse:
+def situation_mois(
+    db: Session, user: User, mois: str | None = None
+) -> tuple[ResultatBudget, list[CategorieBudgetStatus], str]:
+    """Calcule la situation budgétaire (recommandé/réalisé par catégorie) pour un mois donné.
+
+    Fonction réutilisable : le dashboard l'utilise directement, et le module reports
+    s'appuie dessus pour bâtir les bilans mensuels/trimestriels — évite de dupliquer
+    cette logique entre les deux modules.
+    """
     profile = db.scalar(select(Profile).where(Profile.user_id == user.id))
     if profile is None:
         raise HTTPException(
@@ -90,6 +98,12 @@ def get_dashboard(db: Session, user: User, mois: str | None = None) -> Dashboard
                 ecart=round(montant_recommande - montant_realise, 2),
             )
         )
+
+    return resultat, categories_status, periode_label
+
+
+def get_dashboard(db: Session, user: User, mois: str | None = None) -> DashboardResponse:
+    resultat, categories_status, periode_label = situation_mois(db, user, mois)
 
     return DashboardResponse(
         periode=periode_label,
