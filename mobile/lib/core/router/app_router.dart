@@ -1,0 +1,52 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../features/auth/application/auth_controller.dart';
+import '../../features/auth/application/auth_state.dart';
+import '../../features/auth/presentation/login_screen.dart';
+import '../../features/auth/presentation/register_screen.dart';
+import '../../features/home/presentation/home_screen.dart';
+import '../widgets/splash_screen.dart';
+
+/// Transforme les changements de authControllerProvider en notifications que
+/// GoRouter peut écouter (refreshListenable attend un Listenable, pas un
+/// Riverpod provider directement).
+class _RouterRefreshNotifier extends ChangeNotifier {
+  _RouterRefreshNotifier(Ref ref) {
+    ref.listen(authControllerProvider, (previous, next) {
+      if (previous?.status != next.status) notifyListeners();
+    });
+  }
+}
+
+final routerProvider = Provider<GoRouter>((ref) {
+  final refreshNotifier = _RouterRefreshNotifier(ref);
+
+  return GoRouter(
+    initialLocation: '/splash',
+    refreshListenable: refreshNotifier,
+    redirect: (context, state) {
+      final authState = ref.read(authControllerProvider);
+      final location = state.matchedLocation;
+      final isAuthRoute = location == '/login' || location == '/register';
+
+      if (authState.status == AuthStatus.unknown) {
+        return location == '/splash' ? null : '/splash';
+      }
+
+      final loggedIn = authState.status == AuthStatus.authenticated;
+      if (!loggedIn) {
+        return isAuthRoute ? null : '/login';
+      }
+      // Connecté : on ne doit jamais rester sur splash/login/register.
+      return (location == '/splash' || isAuthRoute) ? '/home' : null;
+    },
+    routes: [
+      GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(path: '/register', builder: (context, state) => const RegisterScreen()),
+      GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
+    ],
+  );
+});
