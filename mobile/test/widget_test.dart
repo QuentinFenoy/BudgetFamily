@@ -1,30 +1,43 @@
-// This is a basic Flutter widget test.
+// Smoke test : l'application démarre et construit son shell de navigation.
 //
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// On surcharge tokenStorageProvider par une implémentation de test pour éviter
+// tout accès au canal natif flutter_secure_storage (indisponible sous
+// `flutter test`). Sans token stocké, le bootstrap d'authentification résout
+// simplement vers l'état "non authentifié", sans appel réseau.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:budgetfamily/core/network/providers.dart';
+import 'package:budgetfamily/core/network/token_storage.dart';
 import 'package:budgetfamily/main.dart';
 
+class _FakeTokenStorage extends TokenStorage {
+  @override
+  Future<String?> readToken() async => null;
+
+  @override
+  Future<void> saveToken(String token) async {}
+
+  @override
+  Future<void> clearToken() async {}
+}
+
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets("l'application démarre et rend un MaterialApp", (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [tokenStorageProvider.overrideWithValue(_FakeTokenStorage())],
+        child: const BudgetFamilyApp(),
+      ),
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    // Laisse le bootstrap asynchrone (lecture du token) se résoudre.
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Le shell de navigation MaterialApp.router est présent dès le démarrage,
+    // quel que soit l'écran affiché (splash puis login sans token).
+    expect(find.byType(MaterialApp), findsOneWidget);
   });
 }

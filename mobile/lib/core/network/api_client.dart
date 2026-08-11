@@ -79,15 +79,15 @@ class ApiClient {
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
         return const ApiException(
-          "La connexion au serveur a expiré. Vérifiez votre connexion internet.",
+          'La connexion au serveur a expiré. Vérifiez votre connexion internet.',
         );
       case DioExceptionType.connectionError:
         return const ApiException(
-          "Impossible de joindre le serveur. Vérifiez votre connexion internet.",
+          'Impossible de joindre le serveur. Vérifiez votre connexion internet.',
         );
       default:
         return ApiException(
-          "Une erreur est survenue (code $statusCode).",
+          'Une erreur est survenue (code $statusCode).',
           statusCode: statusCode,
         );
     }

@@ -1,4 +1,4 @@
-import 'auth_models.dart';
+import '../data/auth_models.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
