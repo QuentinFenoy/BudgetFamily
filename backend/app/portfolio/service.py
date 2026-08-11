@@ -11,7 +11,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import AllocationSimulation, Profile, SubscriptionTier, User
+from app.db.models import AllocationSimulation, Profile, SavingsGoal, SubscriptionTier, User
 from app.portfolio.allocator import METHODES, construire_allocation
 from app.portfolio.data_provider import load_asset_class_stats
 from app.portfolio.schemas import (
@@ -39,6 +39,7 @@ def get_allocation(
     methode: str = "hrp",
     montant: float | None = None,
     save: bool = True,
+    goal_id: int | None = None,
 ) -> PortfolioAllocationResponse:
     # Fonctionnalité de conseil réservée à l'offre payante (cf. doc, sections 3 et 8).
     _verifier_acces_premium(user)
@@ -48,6 +49,14 @@ def get_allocation(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Méthode inconnue : {methode!r} (attendu : {', '.join(METHODES)})",
         )
+
+    if goal_id is not None:
+        goal = db.scalar(select(SavingsGoal).where(SavingsGoal.id == goal_id, SavingsGoal.user_id == user.id))
+        if goal is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Objectif d'épargne introuvable — vérifiez goal_id.",
+            )
 
     profile = db.scalar(select(Profile).where(Profile.user_id == user.id))
     if profile is None:
@@ -90,6 +99,7 @@ def get_allocation(
         horizon_annees=profile.horizon_annees,
         objectif=profile.objectif,
         methode=methode,
+        goal_id=goal_id,
         part_croissance=allocation.part_croissance,
         part_defensive=allocation.part_defensive,
         allocation=lignes,
@@ -102,7 +112,7 @@ def get_allocation(
     )
 
     if save:
-        save_simulation(db, user, resultat, montant)
+        save_simulation(db, user, resultat, montant, goal_id)
 
     return resultat
 
@@ -116,7 +126,11 @@ def _verifier_acces_premium(user: User) -> None:
 
 
 def save_simulation(
-    db: Session, user: User, resultat: PortfolioAllocationResponse, montant: float | None
+    db: Session,
+    user: User,
+    resultat: PortfolioAllocationResponse,
+    montant: float | None,
+    goal_id: int | None = None,
 ) -> AllocationSimulation:
     """Enregistre un instantané de la simulation déjà calculée.
 
@@ -126,6 +140,7 @@ def save_simulation(
     """
     simulation = AllocationSimulation(
         user_id=user.id,
+        goal_id=goal_id,
         methode=resultat.methode,
         montant=montant,
         part_croissance=resultat.part_croissance,
@@ -166,6 +181,7 @@ def get_simulation(db: Session, user: User, simulation_id: int) -> AllocationSim
     return AllocationSimulationDetail(
         id=simulation.id,
         methode=simulation.methode,
+        goal_id=simulation.goal_id,
         montant=simulation.montant,
         part_croissance=simulation.part_croissance,
         part_defensive=simulation.part_defensive,

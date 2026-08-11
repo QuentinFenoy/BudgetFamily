@@ -74,6 +74,9 @@ class User(Base):
     allocation_simulations: Mapped[list["AllocationSimulation"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    savings_goals: Mapped[list["SavingsGoal"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", order_by="SavingsGoal.priorite"
+    )
 
 
 class Profile(Base):
@@ -180,6 +183,32 @@ class Subscription(Base):
     user: Mapped["User"] = relationship(back_populates="subscriptions")
 
 
+class SavingsGoal(Base):
+    """Objectif d'épargne persisté (ex: fonds d'urgence, apport immobilier).
+
+    Miroir persistant de app.savings.models.ObjectifEpargne (dataclass pure du moteur
+    de calcul) : cette table stocke l'état déclaré par l'utilisateur, le moteur
+    (app.savings.engine) reste inchangé et continue de raisonner sur des dataclasses
+    en mémoire — la conversion se fait dans app.savings.service au moment de l'appel.
+    """
+
+    __tablename__ = "savings_goals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    libelle: Mapped[str] = mapped_column(String(120), nullable=False)
+    montant_cible: Mapped[float] = mapped_column(Float, nullable=False)
+    montant_actuel: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    priorite: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="savings_goals")
+    allocation_simulations: Mapped[list["AllocationSimulation"]] = relationship(back_populates="goal")
+
+
 class AllocationSimulation(Base):
     """Historique des simulations d'allocation de portefeuille (module app.portfolio).
 
@@ -189,16 +218,17 @@ class AllocationSimulation(Base):
     renvoyées à l'utilisateur (classes génériques uniquement — jamais de ticker, cf.
     doc d'architecture section 8, invariant déjà vérifié côté API).
 
-    `goal_id` est volontairement absent pour l'instant : SavingsGoal (app.savings) est
-    aujourd'hui un moteur de calcul pur, sans persistance en base. Le lien pourra être
-    ajouté (FK nullable) le jour où les objectifs d'épargne seront eux-mêmes persistés,
-    sans migration destructive puisqu'il s'agirait d'un ajout de colonne nullable.
+    `goal_id` est une FK nullable vers SavingsGoal : nullable parce qu'une simulation
+    peut être générale (profil global, pas rattachée à un objectif précis).
     """
 
     __tablename__ = "allocation_simulations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    goal_id: Mapped[int | None] = mapped_column(
+        ForeignKey("savings_goals.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     methode: Mapped[str] = mapped_column(String(10), nullable=False)  # "hrp" | "erc"
     montant: Mapped[float | None] = mapped_column(Float, nullable=True)
 
@@ -216,3 +246,4 @@ class AllocationSimulation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
     user: Mapped["User"] = relationship(back_populates="allocation_simulations")
+    goal: Mapped["SavingsGoal | None"] = relationship(back_populates="allocation_simulations")

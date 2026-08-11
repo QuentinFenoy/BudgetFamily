@@ -22,6 +22,7 @@ class PortfolioAllocationResponse(BaseModel):
     horizon_annees: int | None
     objectif: str
     methode: str = Field(..., description="Méthode d'allocation intra-classe (hrp | erc)")
+    goal_id: int | None = Field(None, description="Objectif d'épargne associé, si fourni")
 
     part_croissance: float
     part_defensive: float
@@ -43,6 +44,7 @@ class AllocationSimulationSummary(BaseModel):
 
     id: int
     methode: str
+    goal_id: int | None
     montant: float | None
     part_croissance: float
     part_defensive: float

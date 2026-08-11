@@ -24,15 +24,17 @@ def allocation(
     methode: Literal["hrp", "erc"] = "hrp",
     montant: Annotated[float | None, Query(ge=0, description="Capital à répartir, en euros")] = None,
     save: Annotated[bool, Query(description="Enregistrer cette simulation dans l'historique")] = True,
+    goal_id: Annotated[int | None, Query(description="Objectif d'épargne associé, si pertinent")] = None,
 ) -> PortfolioAllocationResponse:
     """Propose une allocation par classe d'actifs générique, adaptée au profil de
     l'utilisateur connecté (tolérance au risque, âge, horizon, objectif).
 
     Réservé à l'offre payante. Ne renvoie que des classes génériques, jamais
     d'instrument nominatif. Enregistrée dans l'historique par défaut (save=false
-    pour un aperçu non conservé).
+    pour un aperçu non conservé). goal_id, optionnel, rattache la simulation à un
+    objectif d'épargne persisté (doit appartenir à l'utilisateur connecté).
     """
-    return get_allocation(db, current_user, methode=methode, montant=montant, save=save)
+    return get_allocation(db, current_user, methode=methode, montant=montant, save=save, goal_id=goal_id)
 
 
 @router.get("/simulations", response_model=list[AllocationSimulationSummary])

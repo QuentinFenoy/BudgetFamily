@@ -1,13 +1,30 @@
 """Endpoints liés à la gestion des objectifs d'épargne."""
 
-from fastapi import APIRouter
+from typing import Annotated
 
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.orm import Session
+
+from app.auth.dependencies import CurrentUser
+from app.db.session import get_db
 from app.savings.engine import repartir_epargne
 from app.savings.models import ObjectifEpargne
+from app.savings.persistence_service import (
+    create_goal,
+    delete_goal,
+    get_goal,
+    list_goals,
+    repartir_epargne_automatique,
+    update_goal,
+)
 from app.savings.schemas import (
+    AllocationObjectifResponse,
+    RepartitionAutoRequest,
     RepartitionEpargneRequest,
     ResultatRepartitionResponse,
-    AllocationObjectifResponse,
+    SavingsGoalCreate,
+    SavingsGoalResponse,
+    SavingsGoalUpdate,
 )
 
 router = APIRouter(prefix="/savings", tags=["savings"])
@@ -15,8 +32,8 @@ router = APIRouter(prefix="/savings", tags=["savings"])
 
 @router.post("/repartition", response_model=ResultatRepartitionResponse)
 def calculate_repartition(payload: RepartitionEpargneRequest) -> ResultatRepartitionResponse:
-    """Répartit un montant d'épargne disponible entre plusieurs objectifs,
-    selon la méthode choisie (cascade par priorité, ou proportionnelle)."""
+    """Répartit un montant d'épargne disponible entre plusieurs objectifs fournis dans
+    la requête (stateless, ne touche pas aux objectifs persistés)."""
     objectifs = [
         ObjectifEpargne(
             id=o.id,
@@ -33,3 +50,55 @@ def calculate_repartition(payload: RepartitionEpargneRequest) -> ResultatReparti
         allocations=[AllocationObjectifResponse(**a.__dict__) for a in resultat.allocations],
         epargne_non_allouee=resultat.epargne_non_allouee,
     )
+
+
+# ── Objectifs d'épargne persistés (CRUD) ─────────────────────────────────────────
+
+
+@router.post("/goals", response_model=SavingsGoalResponse, status_code=status.HTTP_201_CREATED)
+def create_savings_goal(
+    payload: SavingsGoalCreate, current_user: CurrentUser, db: Annotated[Session, Depends(get_db)]
+) -> SavingsGoalResponse:
+    return create_goal(db, current_user, payload)
+
+
+@router.get("/goals", response_model=list[SavingsGoalResponse])
+def list_savings_goals(
+    current_user: CurrentUser, db: Annotated[Session, Depends(get_db)]
+) -> list[SavingsGoalResponse]:
+    return list_goals(db, current_user)
+
+
+@router.get("/goals/{goal_id}", response_model=SavingsGoalResponse)
+def get_savings_goal(
+    goal_id: int, current_user: CurrentUser, db: Annotated[Session, Depends(get_db)]
+) -> SavingsGoalResponse:
+    return get_goal(db, current_user, goal_id)
+
+
+@router.patch("/goals/{goal_id}", response_model=SavingsGoalResponse)
+def update_savings_goal(
+    goal_id: int,
+    payload: SavingsGoalUpdate,
+    current_user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> SavingsGoalResponse:
+    return update_goal(db, current_user, goal_id, payload)
+
+
+@router.delete("/goals/{goal_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_savings_goal(
+    goal_id: int, current_user: CurrentUser, db: Annotated[Session, Depends(get_db)]
+) -> None:
+    delete_goal(db, current_user, goal_id)
+
+
+@router.post("/repartition-auto", response_model=ResultatRepartitionResponse)
+def repartition_automatique(
+    payload: RepartitionAutoRequest,
+    current_user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> ResultatRepartitionResponse:
+    """Comme /repartition, mais charge directement les objectifs persistés de
+    l'utilisateur — pas besoin de les renvoyer intégralement à chaque appel."""
+    return repartir_epargne_automatique(db, current_user, payload)
