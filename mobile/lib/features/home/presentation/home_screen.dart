@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/format.dart';
 import '../../../core/network/api_exception.dart';
@@ -244,9 +245,7 @@ class _ProfilAComplete extends StatelessWidget {
             ElevatedButton.icon(
               icon: const Icon(Icons.arrow_forward),
               label: const Text('Compléter mon profil'),
-              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Écran d\'onboarding à venir.')),
-              ),
+              onPressed: () => context.push('/onboarding'),
             ),
           ],
         ),
