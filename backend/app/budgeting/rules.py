@@ -1,15 +1,22 @@
-"""Constantes du modèle de répartition budgétaire (cf. document d'architecture, section 10.4)."""
+"""Constantes du modèle de répartition budgétaire (cf. document d'architecture, section 10.4).
+
+Coefficients recalibrés sur des ordres de grandeur français réalistes. L'alimentation
+était surévaluée (450 €/personne et 35 % du disponible), ce qui comprimait mécaniquement
+l'épargne, réduite à un simple résidu. Elle passe à 330 €/personne / 30 %, et les postes
+discrétionnaires (loisirs, imprévus) sont légèrement resserrés. Ces valeurs restent des
+heuristiques par défaut, ajustables — pas un conseil budgétaire personnalisé.
+"""
 
 from .models import Objectif, Priorite
 
 # --- Catégories plafonnées (besoins de base) ---
 # poids: part du Disponible ; plafond: montant max par habitant (ou par enfant)
 CATEGORIES_PLAFONNEES = {
-    "alimentation": {"poids": 0.35, "plafond_par_hab": 450.0, "priorite": Priorite.ESSENTIEL},
+    "alimentation": {"poids": 0.30, "plafond_par_hab": 330.0, "priorite": Priorite.ESSENTIEL},
     "transport": {"poids": 0.15, "plafond_par_hab": 250.0, "priorite": Priorite.SEMI_ESSENTIEL},
-    "vetements": {"poids": 0.08, "plafond_par_hab": 120.0, "priorite": Priorite.SEMI_ESSENTIEL},
+    "vetements": {"poids": 0.07, "plafond_par_hab": 110.0, "priorite": Priorite.SEMI_ESSENTIEL},
     "sante": {"poids": 0.05, "plafond_par_hab": 100.0, "priorite": Priorite.ESSENTIEL},
-    "enfants": {"poids": 0.12, "plafond_par_enfant": 200.0, "priorite": Priorite.ESSENTIEL},
+    "enfants": {"poids": 0.12, "plafond_par_enfant": 220.0, "priorite": Priorite.ESSENTIEL},
 }
 
 # --- Catégories élastiques (dégressives par palier, jamais plafonnées) ---
@@ -17,8 +24,8 @@ CATEGORIES_PLAFONNEES = {
 SEUIL_DEGRESSIVITE_PAR_HAB = 3000.0
 
 CATEGORIES_ELASTIQUES = {
-    "loisirs": {"poids_plein": 0.15, "poids_reduit": 0.07, "priorite": Priorite.DISCRETIONNAIRE},
-    "imprevus": {"poids_plein": 0.10, "poids_reduit": 0.04, "priorite": Priorite.DISCRETIONNAIRE},
+    "loisirs": {"poids_plein": 0.13, "poids_reduit": 0.06, "priorite": Priorite.DISCRETIONNAIRE},
+    "imprevus": {"poids_plein": 0.09, "poids_reduit": 0.04, "priorite": Priorite.DISCRETIONNAIRE},
 }
 
 # --- Taux d'épargne de référence par tranche de Disponible/hab ---

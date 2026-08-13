@@ -25,7 +25,7 @@ def test_calculate_budget_celibataire_haut_revenu():
     data = response.json()
     assert data["disponible"] == 10000
     assert data["epargne_potentielle"] > 5000
-    assert data["montants_categories"]["alimentation"] == 450.0
+    assert data["montants_categories"]["alimentation"] == 330.0
 
 
 def test_calculate_budget_validation_erreur_si_revenus_negatifs():

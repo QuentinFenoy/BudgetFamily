@@ -7,6 +7,7 @@ import '../../../core/network/api_exception.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../dashboard/application/dashboard_providers.dart';
 import '../../dashboard/data/dashboard_models.dart';
+import '../../expenses/presentation/add_expense_sheet.dart';
 
 /// Écran principal : affiche le tableau de bord budgétaire du mois courant,
 /// premier appel API authentifié réel (GET /v1/dashboard).
@@ -37,6 +38,20 @@ class HomeScreen extends ConsumerWidget {
             onPressed: () => ref.read(authControllerProvider.notifier).logout(),
           ),
         ],
+      ),
+      floatingActionButton: dashboard.maybeWhen(
+        data: (summary) => summary.categories.isEmpty
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: () => _ajouterDepense(
+                  context,
+                  ref,
+                  summary.categories.map((c) => c.libelle).toList(),
+                ),
+                icon: const Icon(Icons.add),
+                label: const Text('Dépense'),
+              ),
+        orElse: () => null,
       ),
       body: dashboard.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -282,5 +297,24 @@ class _ErrorState extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Ouvre la feuille de saisie d'une dépense ; en cas de succès, rafraîchit le
+/// dashboard pour que le « réalisé » des catégories se mette à jour.
+Future<void> _ajouterDepense(BuildContext context, WidgetRef ref, List<String> categories) async {
+  final added = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (_) => AddExpenseSheet(categories: categories),
+  );
+  if (added == true) {
+    ref.invalidate(dashboardProvider);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dépense ajoutée.')),
+      );
+    }
   }
 }

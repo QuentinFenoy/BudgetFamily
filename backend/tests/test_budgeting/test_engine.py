@@ -16,14 +16,14 @@ def test_celibataire_haut_revenu_logement_paye():
     resultat = calculer_budget(profil)
 
     assert resultat.disponible == 10000
-    # catégories plafonnées : 450+250+120+100 = 920 (enfants = 0)
-    assert resultat.montants_categories["alimentation"] == 450.0
+    # catégories plafonnées : 330+250+110+100 = 790 (enfants = 0)
+    assert resultat.montants_categories["alimentation"] == 330.0
     assert resultat.montants_categories["transport"] == 250.0
     assert resultat.montants_categories["enfants"] == 0.0
-    # loisirs dégressif : 15%*3000 + 7%*7000 = 450+490 = 940
-    assert math.isclose(resultat.montants_categories["loisirs"], 940.0, abs_tol=0.01)
-    # imprevus dégressif : 10%*3000 + 4%*7000 = 300+280 = 580
-    assert math.isclose(resultat.montants_categories["imprevus"], 580.0, abs_tol=0.01)
+    # loisirs dégressif : 13%*3000 + 6%*7000 = 390+420 = 810
+    assert math.isclose(resultat.montants_categories["loisirs"], 810.0, abs_tol=0.01)
+    # imprevus dégressif : 9%*3000 + 4%*7000 = 270+280 = 550
+    assert math.isclose(resultat.montants_categories["imprevus"], 550.0, abs_tol=0.01)
     # épargne potentielle largement > 50%
     assert resultat.epargne_potentielle > 5000
     assert resultat.epargne_potentielle / resultat.disponible > 0.7
