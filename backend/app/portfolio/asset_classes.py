@@ -35,6 +35,8 @@ class AssetClass:
     description: str
     sleeve: str       # SLEEVE_CROISSANCE | SLEEVE_DEFENSIF
     proxys: tuple[str, ...]  # USAGE INTERNE UNIQUEMENT — jamais exposé par l'API
+    definition: str = ""          # explication accessible, montrée à l'utilisateur
+    exemples: tuple[str, ...] = ()  # exemples concrets, génériques (pédagogie)
 
 
 # Ordre canonique des classes (sert d'index aux vecteurs/matrices).
@@ -45,6 +47,8 @@ ASSET_CLASSES: tuple[AssetClass, ...] = (
         description="Grandes et moyennes capitalisations des marchés développés, diversifiées mondialement.",
         sleeve=SLEEVE_CROISSANCE,
         proxys=("IWDA.AS", "XDWD.DE"),
+        definition="Des parts d'entreprises cotées dans les grands pays développés. Vous devenez copropriétaire de milliers de sociétés et profitez de leur croissance sur le long terme, en acceptant des variations parfois fortes à court terme.",
+        exemples=("De grandes entreprises comme Apple, LVMH ou Nestlé", "Un fonds indiciel « actions monde » qui les regroupe"),
     ),
     AssetClass(
         cle="actions_marches_emergents",
@@ -52,6 +56,8 @@ ASSET_CLASSES: tuple[AssetClass, ...] = (
         description="Actions des économies émergentes — potentiel de croissance supérieur, volatilité plus élevée.",
         sleeve=SLEEVE_CROISSANCE,
         proxys=("EIMI.L", "XMME.DE"),
+        definition="Des parts d'entreprises des économies en développement (Chine, Inde, Brésil…). Un potentiel de croissance plus élevé, mais des variations et des risques (politiques, monétaires) plus importants.",
+        exemples=("De grands groupes comme Samsung, TSMC ou Tencent", "Un fonds « marchés émergents »"),
     ),
     AssetClass(
         cle="immobilier_cote",
@@ -59,6 +65,8 @@ ASSET_CLASSES: tuple[AssetClass, ...] = (
         description="Sociétés foncières cotées (immobilier international) — source de revenus et de diversification.",
         sleeve=SLEEVE_CROISSANCE,
         proxys=("IWDP.AS",),
+        definition="Investir dans l'immobilier via la Bourse, sans acheter de bien en direct. Des sociétés cotées détiennent bureaux, commerces et logements, et vous en reversent les loyers.",
+        exemples=("Une foncière cotée comme Unibail-Rodamco ou Klépierre", "Un fonds « immobilier » (pierre-papier cotée)"),
     ),
     AssetClass(
         cle="obligations_souveraines_euro",
@@ -66,6 +74,8 @@ ASSET_CLASSES: tuple[AssetClass, ...] = (
         description="Dette souveraine de la zone euro — socle défensif, faible volatilité.",
         sleeve=SLEEVE_DEFENSIF,
         proxys=("IEGA.AS",),
+        definition="Prêter de l'argent à un État de la zone euro, qui vous verse des intérêts puis vous rembourse. Peu risqué, pour un rendement modéré.",
+        exemples=("Les obligations de la France (OAT) ou de l'Allemagne (Bund)", "Un fonds d'obligations d'État"),
     ),
     AssetClass(
         cle="obligations_entreprises_euro",
@@ -73,6 +83,8 @@ ASSET_CLASSES: tuple[AssetClass, ...] = (
         description="Dette d'entreprises de qualité (investment grade) en euro — rendement supérieur aux souveraines.",
         sleeve=SLEEVE_DEFENSIF,
         proxys=("IEAC.AS",),
+        definition="Prêter à de grandes entreprises solides plutôt qu'à des États. Un peu plus risqué que la dette d'État, donc un peu mieux rémunéré.",
+        exemples=("La dette émise par des groupes comme Sanofi ou TotalEnergies", "Un fonds d'obligations d'entreprises"),
     ),
     AssetClass(
         cle="or_metaux_precieux",
@@ -80,6 +92,8 @@ ASSET_CLASSES: tuple[AssetClass, ...] = (
         description="Or physique — actif de diversification, décorrélé des actions en période de stress.",
         sleeve=SLEEVE_DEFENSIF,
         proxys=("IGLN.L", "SGLD.L"),
+        definition="L'or, valeur refuge : il ne verse aucun revenu mais tend à protéger en cas de crise ou d'inflation, quand les actions baissent. Sert surtout à diversifier.",
+        exemples=("De l'or physique (lingots, pièces)", "Un fonds adossé à de l'or"),
     ),
     AssetClass(
         cle="monetaire_liquidites",
@@ -87,6 +101,8 @@ ASSET_CLASSES: tuple[AssetClass, ...] = (
         description="Placements monétaires euro à très court terme — capital stable, forte liquidité.",
         sleeve=SLEEVE_DEFENSIF,
         proxys=("XEON.DE",),
+        definition="Votre argent « au chaud » : disponible à tout moment et sans risque sur le capital, mais faiblement rémunéré. C'est le matelas de sécurité du portefeuille.",
+        exemples=("Un Livret A ou un LDDS", "Un fonds monétaire"),
     ),
 )
 
@@ -129,4 +145,20 @@ DEFAULT_CORRELATIONS: dict[tuple[str, str], float] = {
     ("obligations_entreprises_euro", "or_metaux_precieux"): 0.15,
     ("obligations_entreprises_euro", "monetaire_liquidites"): -0.03,
     ("or_metaux_precieux", "monetaire_liquidites"): 0.00,
+}
+
+
+# --- Hypothèses de rendement LONG TERME (prospectives) ------------------------------
+# Distinctes de DEFAULT_MU_VOL, dont les rendements viennent des ~10 dernières années
+# (obligations ~0 %, or à 10 % : une décennie atypique, mauvais estimateur du futur).
+# Utilisées UNIQUEMENT pour le rendement/Sharpe affichés. La covariance — c.-à-d. le
+# risque, qui pilote les poids — reste, elle, estimée sur données de marché.
+LONG_RUN_MU: dict[str, float] = {
+    "actions_monde_developpe": 0.065,
+    "actions_marches_emergents": 0.075,
+    "immobilier_cote": 0.055,
+    "obligations_souveraines_euro": 0.028,
+    "obligations_entreprises_euro": 0.038,
+    "or_metaux_precieux": 0.030,
+    "monetaire_liquidites": 0.022,
 }

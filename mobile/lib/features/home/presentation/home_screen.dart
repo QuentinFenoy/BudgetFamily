@@ -32,6 +32,37 @@ class HomeScreen extends ConsumerWidget {
                 visualDensity: VisualDensity.compact,
               ),
             ),
+          if (dashboard.hasValue)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              onSelected: (route) => context.push('/$route'),
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'portfolio',
+                  child: Row(children: [
+                    Icon(Icons.pie_chart_outline),
+                    SizedBox(width: 12),
+                    Text('Allocation'),
+                  ]),
+                ),
+                PopupMenuItem(
+                  value: 'savings',
+                  child: Row(children: [
+                    Icon(Icons.savings_outlined),
+                    SizedBox(width: 12),
+                    Text('Objectifs d\'épargne'),
+                  ]),
+                ),
+                PopupMenuItem(
+                  value: 'profile/edit',
+                  child: Row(children: [
+                    Icon(Icons.edit_outlined),
+                    SizedBox(width: 12),
+                    Text('Modifier le profil'),
+                  ]),
+                ),
+              ],
+            ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Se déconnecter',

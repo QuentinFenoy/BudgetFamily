@@ -10,11 +10,27 @@ from app.db.session import get_db
 from app.portfolio.schemas import (
     AllocationSimulationDetail,
     AllocationSimulationSummary,
+    AssetClassInfoResponse,
     PortfolioAllocationResponse,
 )
-from app.portfolio.service import get_allocation, get_simulation, list_simulations
+from app.portfolio.service import (
+    get_allocation,
+    get_asset_classes,
+    get_simulation,
+    list_simulations,
+)
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
+
+
+@router.get("/asset-classes", response_model=list[AssetClassInfoResponse])
+def asset_classes(current_user: CurrentUser) -> list[AssetClassInfoResponse]:
+    """Fiches pédagogiques des classes d'actifs (définition + exemples concrets).
+
+    Authentifié mais non réservé au premium : contenu éducatif générique, pas un
+    conseil. Ne contient aucun instrument nominatif.
+    """
+    return get_asset_classes()
 
 
 @router.get("/allocation", response_model=PortfolioAllocationResponse)

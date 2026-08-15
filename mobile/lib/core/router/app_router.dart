@@ -8,6 +8,10 @@ import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/onboarding/presentation/onboarding_screen.dart';
+import '../../features/portfolio/presentation/allocation_screen.dart';
+import '../../features/portfolio/presentation/history_screen.dart';
+import '../../features/profile/presentation/edit_profile_screen.dart';
+import '../../features/savings/presentation/savings_screen.dart';
 import '../widgets/splash_screen.dart';
 
 /// Transforme les changements de authControllerProvider en notifications que
@@ -49,6 +53,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/register', builder: (context, state) => const RegisterScreen()),
       GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
       GoRoute(path: '/onboarding', builder: (context, state) => const OnboardingScreen()),
+      GoRoute(path: '/profile/edit', builder: (context, state) => const EditProfileScreen()),
+      GoRoute(path: '/portfolio', builder: (context, state) => const AllocationScreen()),
+      GoRoute(path: '/portfolio/history', builder: (context, state) => const HistoryScreen()),
+      GoRoute(path: '/savings', builder: (context, state) => const SavingsScreen()),
     ],
   );
 });

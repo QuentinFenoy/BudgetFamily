@@ -1,25 +1,31 @@
 """Traduction d'un profil utilisateur en allocation par classe d'actifs.
 
-Logique volontairement transparente et explicable (robo-advisor prudent), pilotée
-par le profil plutôt que par des prévisions de rendement fragiles :
+Logique transparente et explicable (robo-advisor prudent), pilotée par le profil
+plutôt que par des prévisions de rendement fragiles :
 
 1. Une fraction « croissance » cible est dérivée du profil — tolérance au risque,
-   puis plafonnée par l'âge (glide-path type « 110 - âge »), l'horizon de placement
-   et l'objectif (désendettement/matelas => très défensif).
+   puis plafonnée par l'âge (glide-path « 110 - âge »), l'horizon et l'objectif.
 2. Cette fraction répartit le portefeuille entre le sleeve croissance (actions,
    immobilier) et le sleeve défensif (obligations, or, monétaire).
-3. À l'intérieur de chaque sleeve, les poids sont fixés par HRP (défaut) ou ERC —
-   le cœur robuste de l'optimiseur, qui ne dépend que de la covariance.
+3. Le monétaire est traité à part, comme un TAMPON DE LIQUIDITÉ plafonné : sans cela,
+   la parité de risque (HRP/ERC), qui répartit par risque inverse, s'engouffre dans
+   l'actif à volatilité quasi nulle et produit un portefeuille à ~100 % de cash. Le
+   reste du défensif (obligations, or) est réparti par HRP/ERC sur les actifs réels.
+4. Dans chaque sleeve, les poids viennent de HRP (défaut) ou ERC — le cœur robuste,
+   qui ne dépend que de la covariance.
 
-Résultat : une allocation diversifiée, cohérente avec le profil, sur des classes
-génériques uniquement.
+Rendement/Sharpe affichés : calculés avec des hypothèses de rendement LONG TERME
+(app.portfolio.asset_classes.LONG_RUN_MU), volontairement distinctes des rendements
+réalisés récents (mauvais estimateur du futur). La volatilité, elle, vient de la
+covariance de marché. On sépare ainsi le risque (estimé sur données) du rendement
+(hypothèse prudente).
 """
 
 from dataclasses import dataclass
 
 import numpy as np
 
-from app.portfolio.asset_classes import ASSET_CLASSES, SLEEVE_CROISSANCE
+from app.portfolio.asset_classes import ASSET_CLASSES, LONG_RUN_MU, SLEEVE_CROISSANCE
 from app.portfolio.data_provider import AssetClassStats
 from app.portfolio.risk_engine import equal_risk_contribution, hierarchical_risk_parity
 
@@ -27,7 +33,13 @@ from app.portfolio.risk_engine import equal_risk_contribution, hierarchical_risk
 _GROWTH_BY_RISK = {1: 0.20, 2: 0.35, 3: 0.50, 4: 0.68, 5: 0.85}
 _DEFAULT_RISK = 3
 
-# Taux sans risque pour le ratio de Sharpe estimé (approx. monétaire euro long terme).
+# Part du sleeve défensif conservée en tampon de liquidité (monétaire). Le reste du
+# défensif est investi en actifs réels (obligations, or). Borne le cash pour éviter
+# qu'il ne capte tout le sleeve défensif par pur effet de volatilité quasi nulle.
+_CASH_CLE = "monetaire_liquidites"
+_CASH_PART_OF_DEFENSIVE = 0.20
+
+# Taux sans risque pour le ratio de Sharpe (approx. monétaire euro long terme).
 _RISK_FREE = 0.020
 
 METHODES = ("hrp", "erc")
@@ -66,21 +78,18 @@ def fraction_croissance_cible(
 
     plafonds = [0.90]  # jamais 100 % croissance : on garde toujours du lest
 
-    # Glide-path âge : règle empirique « 110 - âge » en actions.
     if age is not None:
         plafonds.append(max(0.0, min(0.90, (110 - age) / 100.0)))
 
-    # Horizon court => capital à préserver.
     if horizon_annees is not None:
         if horizon_annees < 3:
             plafonds.append(0.20)
         elif horizon_annees < 8:
             plafonds.append(0.60)
 
-    # Objectif : certains imposent la prudence quelle que soit la tolérance déclarée.
     plafonds_objectif = {
-        "desendettement": 0.05,     # rembourser la dette avant d'investir en risqué
-        "matelas_securite": 0.25,   # l'épargne de précaution doit rester liquide/sûre
+        "desendettement": 0.05,
+        "matelas_securite": 0.25,
         "moyen_terme": 0.60,
     }
     if objectif in plafonds_objectif:
@@ -91,6 +100,8 @@ def fraction_croissance_cible(
 
 def _poids_sleeve(cov: np.ndarray, indices: list[int], methode: str) -> np.ndarray:
     """Poids intra-sleeve via HRP ou ERC sur la sous-covariance des classes du sleeve."""
+    if len(indices) == 1:
+        return np.array([1.0])
     sous_cov = cov[np.ix_(indices, indices)]
     if methode == "erc":
         return equal_risk_contribution(sous_cov)
@@ -117,25 +128,38 @@ def construire_allocation(
         for ac in ASSET_CLASSES
         if ac.sleeve == SLEEVE_CROISSANCE and ac.cle in index_par_cle
     ]
-    idx_defensif = [
+    # Défensif « réel » = sleeve défensif SANS le monétaire (traité en tampon à part).
+    idx_defensif_reel = [
         index_par_cle[ac.cle]
         for ac in ASSET_CLASSES
-        if ac.sleeve != SLEEVE_CROISSANCE and ac.cle in index_par_cle
+        if ac.sleeve != SLEEVE_CROISSANCE and ac.cle != _CASH_CLE and ac.cle in index_par_cle
     ]
+    idx_cash = index_par_cle.get(_CASH_CLE)
 
     poids = np.zeros(len(stats.cles))
+
     if idx_croissance and part_croissance > 0:
         poids[idx_croissance] = _poids_sleeve(stats.cov, idx_croissance, methode) * part_croissance
-    if idx_defensif and part_defensive > 0:
-        poids[idx_defensif] = _poids_sleeve(stats.cov, idx_defensif, methode) * part_defensive
+
+    if part_defensive > 0:
+        part_cash = part_defensive * _CASH_PART_OF_DEFENSIVE
+        part_defensif_reel = part_defensive - part_cash
+        if idx_cash is not None:
+            poids[idx_cash] += part_cash
+        if idx_defensif_reel and part_defensif_reel > 0:
+            poids[idx_defensif_reel] = (
+                _poids_sleeve(stats.cov, idx_defensif_reel, methode) * part_defensif_reel
+            )
 
     total = poids.sum()
     if total > 0:
         poids = poids / total  # renormalisation de sûreté
 
-    # Statistiques de portefeuille (rendement = hypothèse, pas une promesse).
+    # Rendement : hypothèses long terme (les rendements réalisés récents sont un mauvais
+    # estimateur du futur). Volatilité : covariance de marché.
+    mu_long_terme = np.array([LONG_RUN_MU.get(cle, 0.0) for cle in stats.cles])
     vol = float(np.sqrt(max(poids @ stats.cov @ poids, 0.0)))
-    rendement = float(poids @ stats.mu)
+    rendement = float(poids @ mu_long_terme)
     sharpe = (rendement - _RISK_FREE) / vol if vol > 1e-9 else 0.0
 
     lignes = []

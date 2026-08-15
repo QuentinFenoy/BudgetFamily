@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../dashboard/application/dashboard_providers.dart';
+import '../../profile/application/profile_providers.dart';
+import '../../profile/data/profile_models.dart';
 import '../application/onboarding_controller.dart';
 import '../data/onboarding_models.dart';
 
@@ -44,7 +46,11 @@ class _ChargeRow {
 }
 
 class OnboardingScreen extends ConsumerStatefulWidget {
-  const OnboardingScreen({super.key});
+  /// Si [initial] est fourni, l'écran passe en mode édition : le formulaire est
+  /// prérempli et la soumission met à jour le profil (PUT) au lieu de le créer.
+  const OnboardingScreen({super.key, this.initial});
+
+  final ProfileDetail? initial;
 
   @override
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -64,6 +70,50 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   final List<_RevenuRow> _revenus = [_RevenuRow()];
   final List<_ChargeRow> _charges = [];
+
+  bool get _isEdit => widget.initial != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initial;
+    if (initial == null) return;
+
+    _nbPersonnes.text = initial.nbPersonnes.toString();
+    _nbEnfants.text = initial.nbEnfants.toString();
+    _age.text = initial.age?.toString() ?? '';
+    _horizon.text = initial.horizonAnnees?.toString() ?? '';
+    _situation = initial.situationFamiliale;
+    _objectif = initial.objectif;
+    _tolerance = initial.toleranceRisque;
+    _matelas = initial.matelasSecuriteAtteint;
+
+    for (final r in _revenus) {
+      r.dispose();
+    }
+    _revenus
+      ..clear()
+      ..addAll(initial.revenus.map((r) {
+        final row = _RevenuRow()..type = r.type;
+        row.libelle.text = r.libelle;
+        row.montant.text = _montantToText(r.montant);
+        return row;
+      }));
+    if (_revenus.isEmpty) _revenus.add(_RevenuRow());
+
+    _charges
+      ..clear()
+      ..addAll(initial.chargesFixes.map((c) {
+        final row = _ChargeRow();
+        row.libelle.text = c.libelle;
+        row.montant.text = _montantToText(c.montant);
+        if (c.categorie != null) row.categorie.text = c.categorie!;
+        return row;
+      }));
+  }
+
+  static String _montantToText(double v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
   @override
   void dispose() {
@@ -147,26 +197,37 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           .toList(),
     );
 
-    final ok = await ref.read(onboardingControllerProvider.notifier).submit(request);
+    final bool ok;
+    if (_isEdit) {
+      ok = await ref.read(profileUpdateControllerProvider.notifier).submit(request);
+    } else {
+      ok = await ref.read(onboardingControllerProvider.notifier).submit(request);
+    }
     if (!mounted) return;
 
     if (ok) {
-      // Le profil existe désormais : on force le rechargement du dashboard puis
-      // on revient dessus (il affichera le budget au lieu du 404).
+      // Le budget a changé : on recharge le dashboard (et le profil en cache en
+      // mode édition), puis on revient à l'écran précédent.
       ref.invalidate(dashboardProvider);
+      if (_isEdit) ref.invalidate(profileProvider);
       context.pop();
     } else {
-      final msg = ref.read(onboardingControllerProvider).errorMessage ?? 'Une erreur est survenue.';
+      final msg = (_isEdit
+              ? ref.read(profileUpdateControllerProvider).errorMessage
+              : ref.read(onboardingControllerProvider).errorMessage) ??
+          'Une erreur est survenue.';
       messenger.showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final submitState = ref.watch(onboardingControllerProvider);
+    final submitting = _isEdit
+        ? ref.watch(profileUpdateControllerProvider).isSubmitting
+        : ref.watch(onboardingControllerProvider).isSubmitting;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Votre profil')),
+      appBar: AppBar(title: Text(_isEdit ? 'Modifier le profil' : 'Votre profil')),
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -295,14 +356,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: submitState.isSubmitting ? null : _submit,
-                child: submitState.isSubmitting
+                onPressed: submitting ? null : _submit,
+                child: submitting
                     ? const SizedBox(
                         height: 20,
                         width: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Valider mon profil'),
+                    : Text(_isEdit ? 'Enregistrer les modifications' : 'Valider mon profil'),
               ),
               const SizedBox(height: 24),
             ],

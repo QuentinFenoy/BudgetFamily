@@ -10,6 +10,9 @@ enum IncomeType {
 
   final String apiValue;
   final String label;
+
+  static IncomeType fromApi(String value) =>
+      IncomeType.values.firstWhere((t) => t.apiValue == value, orElse: () => IncomeType.fixe);
 }
 
 enum Objectif {
@@ -23,6 +26,9 @@ enum Objectif {
 
   final String apiValue;
   final String label;
+
+  static Objectif fromApi(String value) =>
+      Objectif.values.firstWhere((o) => o.apiValue == value, orElse: () => Objectif.aucun);
 }
 
 class IncomeInput {

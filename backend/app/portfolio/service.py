@@ -12,11 +12,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import AllocationSimulation, Profile, SavingsGoal, SubscriptionTier, User
+from app.portfolio.asset_classes import ASSET_CLASSES
 from app.portfolio.allocator import METHODES, construire_allocation
 from app.portfolio.data_provider import load_asset_class_stats
 from app.portfolio.schemas import (
     AllocationSimulationDetail,
     AllocationSimulationSummary,
+    AssetClassInfoResponse,
     LigneAllocationResponse,
     PortfolioAllocationResponse,
 )
@@ -192,3 +194,18 @@ def get_simulation(db: Session, user: User, simulation_id: int) -> AllocationSim
         created_at=simulation.created_at,
         allocation=[LigneAllocationResponse(**ligne) for ligne in simulation.allocation_json],
     )
+
+
+def get_asset_classes() -> list[AssetClassInfoResponse]:
+    """Catalogue pédagogique des classes d'actifs génériques. Contenu statique, sans
+    profil ni palier requis : ce sont des définitions, pas un conseil."""
+    return [
+        AssetClassInfoResponse(
+            cle=ac.cle,
+            nom=ac.nom,
+            categorie=_CATEGORIE_LABEL.get(ac.sleeve, ac.sleeve),
+            definition=ac.definition,
+            exemples=list(ac.exemples),
+        )
+        for ac in ASSET_CLASSES
+    ]

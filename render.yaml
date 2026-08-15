@@ -1,0 +1,24 @@
+# Blueprint Render — déploiement du backend BudgetFamily.
+# À placer à la racine du dépôt. Sur render.com : New > Blueprint, pointer sur le dépôt.
+# La base PostgreSQL n'est PAS gérée ici : elle est chez Neon (DATABASE_URL à renseigner).
+services:
+  - type: web
+    name: budgetfamily-api
+    runtime: python
+    plan: free
+    region: frankfurt          # UE : latence + données utilisateurs en Europe (RGPD)
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: JWT_SECRET_KEY          # généré automatiquement par Render (sécurisé)
+        generateValue: true
+      - key: BILLING_WEBHOOK_SECRET   # idem ; à aligner avec le fournisseur de paiement plus tard
+        generateValue: true
+      - key: DATABASE_URL             # à renseigner MANUELLEMENT = connection string Neon
+        sync: false

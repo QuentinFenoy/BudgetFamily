@@ -59,3 +59,13 @@ class AllocationSimulationDetail(AllocationSimulationSummary):
     """Simulation complète, avec le détail par classe d'actifs."""
 
     allocation: list[LigneAllocationResponse]
+
+
+class AssetClassInfoResponse(BaseModel):
+    """Fiche pédagogique d'une classe d'actifs générique (définition + exemples)."""
+
+    cle: str
+    nom: str
+    categorie: str  # "Croissance" | "Défensif"
+    definition: str
+    exemples: list[str]

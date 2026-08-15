@@ -37,6 +37,9 @@ class ApiClient {
   Future<Response<T>> post<T>(String path, {Object? data}) =>
       _guard(() => _dio.post<T>(path, data: data));
 
+  Future<Response<T>> put<T>(String path, {Object? data}) =>
+      _guard(() => _dio.put<T>(path, data: data));
+
   Future<Response<T>> patch<T>(String path, {Object? data}) =>
       _guard(() => _dio.patch<T>(path, data: data));
 
