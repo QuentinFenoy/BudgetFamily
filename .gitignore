@@ -5,3 +5,8 @@ __pycache__/
 # Base SQLite de dev/local et secrets d'environnement
 *.db
 .env
+
+# Secrets de signature Android — ne jamais committer
+key.properties
+*.jks
+*.keystore
