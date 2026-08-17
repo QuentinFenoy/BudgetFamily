@@ -167,7 +167,7 @@ class _GoalFormSheetState extends ConsumerState<GoalFormSheet> {
                   ? const SizedBox(
                       height: 20,
                       width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
                   : Text(_isEdit ? 'Enregistrer' : 'Créer l\'objectif'),
             ),

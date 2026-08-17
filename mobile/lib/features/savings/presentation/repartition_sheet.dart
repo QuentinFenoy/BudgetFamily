@@ -116,7 +116,7 @@ class _RepartitionSheetState extends ConsumerState<RepartitionSheet> {
                   ? const SizedBox(
                       height: 18,
                       width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.calculate_outlined),
               label: const Text('Répartir'),

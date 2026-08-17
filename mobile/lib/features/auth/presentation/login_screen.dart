@@ -48,6 +48,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    Image.asset('assets/icon/icon.png', width: 88, height: 88),
+                    const SizedBox(height: 20),
                     Text(
                       'BudgetFamily',
                       style: Theme.of(context).textTheme.headlineMedium,
@@ -100,7 +102,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ? const SizedBox(
                               height: 20,
                               width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
                           : const Text('Se connecter'),
                     ),

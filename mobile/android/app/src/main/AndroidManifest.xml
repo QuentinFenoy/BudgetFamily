@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Requis pour que l'app puisse joindre l'API. En build release, Android
+         n'accorde PAS l'accès Internet sans cette déclaration (contrairement au
+         mode debug, où Flutter l'ajoute automatiquement). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="budgetfamily"
         android:name="${applicationName}"
