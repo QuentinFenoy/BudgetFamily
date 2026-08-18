@@ -38,6 +38,14 @@ class HomeScreen extends ConsumerWidget {
               onSelected: (route) => context.push('/$route'),
               itemBuilder: (_) => const [
                 PopupMenuItem(
+                  value: 'reports',
+                  child: Row(children: [
+                    Icon(Icons.assessment_outlined),
+                    SizedBox(width: 12),
+                    Text('Bilans'),
+                  ]),
+                ),
+                PopupMenuItem(
                   value: 'portfolio',
                   child: Row(children: [
                     Icon(Icons.pie_chart_outline),
