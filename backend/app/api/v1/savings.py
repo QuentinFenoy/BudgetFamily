@@ -9,6 +9,7 @@ from app.auth.dependencies import CurrentUser
 from app.db.session import get_db
 from app.savings.engine import repartir_epargne
 from app.savings.models import ObjectifEpargne
+from app.savings.planning_service import construire_plan_epargne
 from app.savings.persistence_service import (
     create_goal,
     delete_goal,
@@ -19,6 +20,7 @@ from app.savings.persistence_service import (
 )
 from app.savings.schemas import (
     AllocationObjectifResponse,
+    PlanEpargneResponse,
     RepartitionAutoRequest,
     RepartitionEpargneRequest,
     ResultatRepartitionResponse,
@@ -102,3 +104,15 @@ def repartition_automatique(
     """Comme /repartition, mais charge directement les objectifs persistés de
     l'utilisateur — pas besoin de les renvoyer intégralement à chaque appel."""
     return repartir_epargne_automatique(db, current_user, payload)
+
+
+@router.get("/plan", response_model=PlanEpargneResponse)
+def plan_epargne(
+    current_user: CurrentUser, db: Annotated[Session, Depends(get_db)]
+) -> PlanEpargneResponse:
+    """Plan d'épargne de l'utilisateur : la capacité d'épargne mensuelle (calculée par
+    le budget) est répartie entre les objectifs selon leur priorité. Pour les comptes
+    premium, chaque objectif reçoit en plus le rendement brut annuel requis pour tenir
+    l'échéance, le risque associé (note /5 + volatilité), un verdict de faisabilité et
+    les rendements nets indicatifs par enveloppe fiscale."""
+    return construire_plan_epargne(db, current_user)

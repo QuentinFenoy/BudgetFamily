@@ -31,6 +31,7 @@ def _to_response(goal: SavingsGoal) -> SavingsGoalResponse:
         montant_cible=goal.montant_cible,
         montant_actuel=goal.montant_actuel,
         priorite=goal.priorite,
+        horizon_mois=goal.horizon_mois,
         montant_restant=montant_restant,
         est_atteint=goal.montant_actuel >= goal.montant_cible,
         created_at=goal.created_at,
@@ -52,6 +53,7 @@ def create_goal(db: Session, user: User, payload: SavingsGoalCreate) -> SavingsG
         montant_cible=payload.montant_cible,
         montant_actuel=payload.montant_actuel,
         priorite=payload.priorite,
+        horizon_mois=payload.horizon_mois,
     )
     db.add(goal)
     db.commit()

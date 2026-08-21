@@ -40,6 +40,7 @@ class SavingsGoalCreate(BaseModel):
     montant_cible: float = Field(..., gt=0)
     montant_actuel: float = Field(0.0, ge=0)
     priorite: int = Field(1, ge=1)
+    horizon_mois: int | None = Field(None, ge=1, description="Échéance visée, en mois")
 
 
 class SavingsGoalUpdate(BaseModel):
@@ -49,6 +50,7 @@ class SavingsGoalUpdate(BaseModel):
     montant_cible: float | None = Field(None, gt=0)
     montant_actuel: float | None = Field(None, ge=0)
     priorite: int | None = Field(None, ge=1)
+    horizon_mois: int | None = Field(None, ge=1)
 
 
 class SavingsGoalResponse(BaseModel):
@@ -59,6 +61,7 @@ class SavingsGoalResponse(BaseModel):
     montant_cible: float
     montant_actuel: float
     priorite: int
+    horizon_mois: int | None
     montant_restant: float
     est_atteint: bool
     created_at: datetime
@@ -68,3 +71,40 @@ class SavingsGoalResponse(BaseModel):
 class RepartitionAutoRequest(BaseModel):
     epargne_disponible: float = Field(..., ge=0)
     methode: Literal["cascade", "proportionnelle"] = "cascade"
+
+
+# ── Plan d'épargne (GET /v1/savings/plan) ────────────────────────────────────────
+
+
+class RendementNetEnveloppeResponse(BaseModel):
+    enveloppe: str
+    taux_imposition: float
+    rendement_net_indicatif: float
+
+
+class PlanObjectif(BaseModel):
+    objectif_id: str
+    libelle: str
+    montant_cible: float
+    montant_actuel: float
+    montant_restant: float
+    priorite: int
+    horizon_mois: int | None
+    mensualite_attribuee: float
+    mois_restants_au_rythme_actuel: float | None
+
+    # Analyse avancée — renseignée pour les comptes premium uniquement.
+    rendement_brut_annuel_requis: float | None = None
+    realisable: str | None = None
+    risque_note: int | None = None  # 0 = aucun rendement requis, 1..5 = échelle de risque
+    volatilite_estimee: float | None = None
+    au_dela_frontiere: bool = False
+    nets_par_enveloppe: list[RendementNetEnveloppeResponse] = []
+
+
+class PlanEpargneResponse(BaseModel):
+    capacite_epargne_mensuelle: float
+    methode: str
+    premium: bool
+    note_rendement_net: str
+    objectifs: list[PlanObjectif]

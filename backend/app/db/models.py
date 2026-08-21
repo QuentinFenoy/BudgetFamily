@@ -200,6 +200,7 @@ class SavingsGoal(Base):
     montant_cible: Mapped[float] = mapped_column(Float, nullable=False)
     montant_actuel: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     priorite: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    horizon_mois: Mapped[int | None] = mapped_column(Integer, nullable=True)  # échéance visée, en mois
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
