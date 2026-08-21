@@ -12,6 +12,7 @@ import '../../features/portfolio/presentation/allocation_screen.dart';
 import '../../features/portfolio/presentation/history_screen.dart';
 import '../../features/profile/presentation/edit_profile_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
+import '../../features/savings/presentation/plan_screen.dart';
 import '../../features/savings/presentation/savings_screen.dart';
 import '../widgets/splash_screen.dart';
 
@@ -58,6 +59,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/portfolio', builder: (context, state) => const AllocationScreen()),
       GoRoute(path: '/portfolio/history', builder: (context, state) => const HistoryScreen()),
       GoRoute(path: '/savings', builder: (context, state) => const SavingsScreen()),
+      GoRoute(path: '/savings/plan', builder: (context, state) => const PlanScreen()),
       GoRoute(path: '/reports', builder: (context, state) => const ReportsScreen()),
     ],
   );

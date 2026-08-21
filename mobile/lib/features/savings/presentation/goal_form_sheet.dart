@@ -33,6 +33,7 @@ class _GoalFormSheetState extends ConsumerState<GoalFormSheet> {
   final _libelle = TextEditingController();
   final _cible = TextEditingController();
   final _actuel = TextEditingController(text: '0');
+  final _horizon = TextEditingController();
   int _priorite = 1;
   bool _submitting = false;
 
@@ -46,6 +47,7 @@ class _GoalFormSheetState extends ConsumerState<GoalFormSheet> {
       _libelle.text = g.libelle;
       _cible.text = _montantToText(g.montantCible);
       _actuel.text = _montantToText(g.montantActuel);
+      _horizon.text = g.horizonMois?.toString() ?? '';
       _priorite = g.priorite;
     }
   }
@@ -55,6 +57,7 @@ class _GoalFormSheetState extends ConsumerState<GoalFormSheet> {
     _libelle.dispose();
     _cible.dispose();
     _actuel.dispose();
+    _horizon.dispose();
     super.dispose();
   }
 
@@ -77,6 +80,7 @@ class _GoalFormSheetState extends ConsumerState<GoalFormSheet> {
       final libelle = _libelle.text.trim();
       final cible = _parseMontant(_cible.text)!;
       final actuel = _parseMontant(_actuel.text)!;
+      final horizon = int.tryParse(_horizon.text.trim());
       if (_isEdit) {
         await repo.updateGoal(
           widget.goal!.id,
@@ -84,6 +88,7 @@ class _GoalFormSheetState extends ConsumerState<GoalFormSheet> {
           montantCible: cible,
           montantActuel: actuel,
           priorite: _priorite,
+          horizonMois: horizon,
         );
       } else {
         await repo.createGoal(
@@ -91,9 +96,11 @@ class _GoalFormSheetState extends ConsumerState<GoalFormSheet> {
           montantCible: cible,
           montantActuel: actuel,
           priorite: _priorite,
+          horizonMois: horizon,
         );
       }
       ref.invalidate(goalsProvider);
+      ref.invalidate(planProvider);
       if (!mounted) return;
       navigator.pop(true);
     } catch (error) {
@@ -159,6 +166,22 @@ class _GoalFormSheetState extends ConsumerState<GoalFormSheet> {
                 DropdownMenuItem(value: 5, child: Text('5 — Secondaire')),
               ],
               onChanged: (v) => setState(() => _priorite = v ?? 1),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _horizon,
+              decoration: const InputDecoration(
+                labelText: 'Durée pour l\'atteindre (mois, facultatif)',
+                hintText: 'ex. 60 pour 5 ans',
+              ),
+              keyboardType: TextInputType.number,
+              validator: (v) {
+                final raw = (v ?? '').trim();
+                if (raw.isEmpty) return null;
+                final n = int.tryParse(raw);
+                if (n == null || n < 1) return 'Nombre de mois positif';
+                return null;
+              },
             ),
             const SizedBox(height: 20),
             ElevatedButton(

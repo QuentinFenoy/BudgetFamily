@@ -13,3 +13,9 @@ final savingsRepositoryProvider = Provider<SavingsRepository>((ref) {
 final goalsProvider = FutureProvider.autoDispose<List<SavingsGoal>>((ref) {
   return ref.watch(savingsRepositoryProvider).listGoals();
 });
+
+/// Plan d'épargne : capacité répartie par priorité + projection premium par objectif.
+/// À invalider en même temps que goalsProvider après toute mutation d'objectif.
+final planProvider = FutureProvider.autoDispose<PlanEpargne>((ref) {
+  return ref.watch(savingsRepositoryProvider).getPlan();
+});

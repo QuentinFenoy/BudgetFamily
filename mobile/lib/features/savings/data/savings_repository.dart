@@ -18,12 +18,14 @@ class SavingsRepository {
     required double montantCible,
     required double montantActuel,
     required int priorite,
+    int? horizonMois,
   }) async {
     await _apiClient.post<Map<String, dynamic>>('/savings/goals', data: {
       'libelle': libelle,
       'montant_cible': montantCible,
       'montant_actuel': montantActuel,
       'priorite': priorite,
+      if (horizonMois != null) 'horizon_mois': horizonMois,
     });
   }
 
@@ -33,17 +35,24 @@ class SavingsRepository {
     required double montantCible,
     required double montantActuel,
     required int priorite,
+    int? horizonMois,
   }) async {
     await _apiClient.patch<Map<String, dynamic>>('/savings/goals/$id', data: {
       'libelle': libelle,
       'montant_cible': montantCible,
       'montant_actuel': montantActuel,
       'priorite': priorite,
+      if (horizonMois != null) 'horizon_mois': horizonMois,
     });
   }
 
   Future<void> deleteGoal(int id) async {
     await _apiClient.delete<void>('/savings/goals/$id');
+  }
+
+  Future<PlanEpargne> getPlan() async {
+    final response = await _apiClient.get<Map<String, dynamic>>('/savings/plan');
+    return PlanEpargne.fromJson(response.data!);
   }
 
   Future<RepartitionResult> repartitionAuto({

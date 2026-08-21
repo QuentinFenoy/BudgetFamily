@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/format.dart';
 import '../../../core/network/api_exception.dart';
@@ -40,6 +41,7 @@ Future<void> _confirmerSuppression(BuildContext context, WidgetRef ref, SavingsG
   try {
     await ref.read(savingsRepositoryProvider).deleteGoal(goal.id);
     ref.invalidate(goalsProvider);
+    ref.invalidate(planProvider);
     messenger.showSnackBar(const SnackBar(content: Text('Objectif supprimé.')));
   } on ApiException catch (e) {
     messenger.showSnackBar(SnackBar(content: Text(e.message)));
@@ -57,6 +59,11 @@ class SavingsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Objectifs d\'épargne'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.insights_outlined),
+            tooltip: 'Mon plan d\'épargne',
+            onPressed: () => context.push('/savings/plan'),
+          ),
           if (goals.valueOrNull?.isNotEmpty ?? false)
             IconButton(
               icon: const Icon(Icons.calculate_outlined),
