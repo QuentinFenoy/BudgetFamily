@@ -67,8 +67,8 @@ def test_plan_gratuit_repartit_sans_champs_premium(client):
     assert obj["horizon_mois"] == 24
     assert "mensualite_attribuee" in obj
     # Champs premium non calculés pour un compte gratuit.
-    assert obj["rendement_brut_annuel_requis"] is None
-    assert obj["nets_par_enveloppe"] == []
+    assert obj["rendement_net_annuel_requis"] is None
+    assert obj["bruts_par_enveloppe"] == []
 
 
 def test_plan_premium_rendement_positif_et_nets(client, db_session):
@@ -81,14 +81,14 @@ def test_plan_premium_rendement_positif_et_nets(client, db_session):
 
     body = client.get("/v1/savings/plan", headers=headers).json()
     assert body["premium"] is True
-    assert body["note_rendement_net"]
+    assert body["note_rendement_brut"]
 
     retraite = next(o for o in body["objectifs"] if o["libelle"] == "Retraite")
     assert retraite["mensualite_attribuee"] == 0.0
-    assert retraite["rendement_brut_annuel_requis"] is not None
-    assert retraite["rendement_brut_annuel_requis"] > 0.0
+    assert retraite["rendement_net_annuel_requis"] is not None
+    assert retraite["rendement_net_annuel_requis"] > 0.0
     assert 1 <= retraite["risque_note"] <= 5
-    assert len(retraite["nets_par_enveloppe"]) == 4
+    assert len(retraite["bruts_par_enveloppe"]) == 4
     assert retraite["realisable"]
 
 
@@ -99,5 +99,5 @@ def test_plan_premium_objectif_hors_de_portee(client, db_session):
 
     body = client.get("/v1/savings/plan", headers=headers).json()
     villa = body["objectifs"][0]
-    assert villa["rendement_brut_annuel_requis"] is None
+    assert villa["rendement_net_annuel_requis"] is None
     assert "hors de portée" in villa["realisable"]

@@ -20,16 +20,16 @@ from app.portfolio.data_provider import load_asset_class_stats
 from app.savings.engine import repartir_epargne
 from app.savings.models import ObjectifEpargne
 from app.savings.projection import (
-    NOTE_RENDEMENT_NET,
+    NOTE_RENDEMENT_BRUT,
+    bruts_par_enveloppe,
     message_faisabilite,
-    nets_par_enveloppe,
-    rendement_brut_annuel_requis,
+    rendement_net_annuel_requis,
     risque_pour_rendement,
 )
 from app.savings.schemas import (
     PlanEpargneResponse,
     PlanObjectif,
-    RendementNetEnveloppeResponse,
+    RendementBrutEnveloppeResponse,
 )
 
 
@@ -94,10 +94,10 @@ def construire_plan_epargne(db: Session, user: User) -> PlanEpargneResponse:
         }
 
         if is_premium and g.horizon_mois:
-            rendement = rendement_brut_annuel_requis(
+            rendement = rendement_net_annuel_requis(
                 g.montant_cible, g.montant_actuel, mensualite, g.horizon_mois
             )
-            champs["rendement_brut_annuel_requis"] = rendement
+            champs["rendement_net_annuel_requis"] = rendement
             champs["realisable"] = message_faisabilite(rendement)
 
             if rendement is not None and rendement > 0.0:
@@ -105,13 +105,13 @@ def construire_plan_epargne(db: Session, user: User) -> PlanEpargneResponse:
                 champs["risque_note"] = risque.note_sur_5
                 champs["volatilite_estimee"] = risque.volatilite_annuelle
                 champs["au_dela_frontiere"] = risque.au_dela_frontiere
-                champs["nets_par_enveloppe"] = [
-                    RendementNetEnveloppeResponse(
-                        enveloppe=n.enveloppe,
-                        taux_imposition=n.taux_imposition,
-                        rendement_net_indicatif=n.rendement_net_indicatif,
+                champs["bruts_par_enveloppe"] = [
+                    RendementBrutEnveloppeResponse(
+                        enveloppe=b.enveloppe,
+                        taux_imposition=b.taux_imposition,
+                        rendement_brut_indicatif=b.rendement_brut_indicatif,
                     )
-                    for n in nets_par_enveloppe(rendement)
+                    for b in bruts_par_enveloppe(rendement)
                 ]
             elif rendement == 0.0:
                 champs["risque_note"] = 0
@@ -123,6 +123,6 @@ def construire_plan_epargne(db: Session, user: User) -> PlanEpargneResponse:
         capacite_epargne_mensuelle=capacite,
         methode="cascade",
         premium=is_premium,
-        note_rendement_net=NOTE_RENDEMENT_NET if is_premium else "",
+        note_rendement_brut=NOTE_RENDEMENT_BRUT if is_premium else "",
         objectifs=objectifs_plan,
     )

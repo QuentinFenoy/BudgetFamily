@@ -76,10 +76,10 @@ class RepartitionAutoRequest(BaseModel):
 # ── Plan d'épargne (GET /v1/savings/plan) ────────────────────────────────────────
 
 
-class RendementNetEnveloppeResponse(BaseModel):
+class RendementBrutEnveloppeResponse(BaseModel):
     enveloppe: str
     taux_imposition: float
-    rendement_net_indicatif: float
+    rendement_brut_indicatif: float
 
 
 class PlanObjectif(BaseModel):
@@ -94,17 +94,17 @@ class PlanObjectif(BaseModel):
     mois_restants_au_rythme_actuel: float | None
 
     # Analyse avancée — renseignée pour les comptes premium uniquement.
-    rendement_brut_annuel_requis: float | None = None
+    rendement_net_annuel_requis: float | None = None
     realisable: str | None = None
     risque_note: int | None = None  # 0 = aucun rendement requis, 1..5 = échelle de risque
     volatilite_estimee: float | None = None
     au_dela_frontiere: bool = False
-    nets_par_enveloppe: list[RendementNetEnveloppeResponse] = []
+    bruts_par_enveloppe: list[RendementBrutEnveloppeResponse] = []
 
 
 class PlanEpargneResponse(BaseModel):
     capacite_epargne_mensuelle: float
     methode: str
     premium: bool
-    note_rendement_net: str
+    note_rendement_brut: str
     objectifs: list[PlanObjectif]

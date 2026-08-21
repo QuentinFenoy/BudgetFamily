@@ -1,13 +1,12 @@
 """Moteur de projection d'un objectif d'épargne (calcul pur, sans dépendance DB).
 
-À partir du montant cible, du déjà-épargné, de la mensualité allouée et de l'échéance,
-on résout le **rendement brut annuel** nécessaire pour atteindre l'objectif dans les
-temps, puis on le traduit en niveau de risque (via la frontière rendement/volatilité de
-l'allocateur) et en message de faisabilité. Un utilitaire indique aussi le rendement net
-indicatif selon l'enveloppe fiscale.
+Le taux résolu est le rendement auquel le capital croît RÉELLEMENT pour atteindre la
+cible : c'est donc un rendement NET (post-fiscalité), celui qui capitalise vers
+l'objectif. Le point d'info inverse ensuite ce net vers le rendement BRUT à viser
+selon l'enveloppe fiscale (brut = net / (1 - impôt)).
 
 Hypothèses : cotisations mensuelles en fin de période (annuité ordinaire), rendement
-constant. C'est une projection indicative, pas une garantie.
+constant. Projection indicative, pas une garantie.
 """
 
 from __future__ import annotations
@@ -26,17 +25,18 @@ def _valeur_future(pv: float, pmt: float, taux_mensuel: float, n: int) -> float:
     return pv * croissance + pmt * (croissance - 1) / taux_mensuel
 
 
-def rendement_brut_annuel_requis(
+def rendement_net_annuel_requis(
     montant_cible: float,
     montant_actuel: float,
     mensualite: float,
     horizon_mois: int | None,
 ) -> float | None:
-    """Rendement brut ANNUEL nécessaire pour atteindre montant_cible en horizon_mois.
+    """Rendement NET annuel nécessaire pour atteindre montant_cible en horizon_mois.
 
-    Renvoie :
+    C'est le rendement effectif que le capital doit dégager (après fiscalité) puisque
+    c'est lui qui capitalise vers l'objectif. Renvoie :
     - 0.0 si l'objectif est atteignable par la seule épargne (aucun rendement requis) ;
-    - le rendement annuel (ex. 0.055 = 5,5 %/an) sinon ;
+    - le rendement net annuel (ex. 0.055 = 5,5 %/an) sinon ;
     - None si l'objectif reste hors de portée même à un rendement irréaliste.
     """
     if horizon_mois is None or horizon_mois <= 0:
@@ -68,14 +68,14 @@ def rendement_brut_annuel_requis(
     return round((1 + taux_mensuel) ** 12 - 1, 4)
 
 
-def message_faisabilite(rendement_annuel: float | None) -> str:
-    """Phrase qualifiant la difficulté du projet selon le rendement requis."""
-    if rendement_annuel is None:
+def message_faisabilite(rendement_net_annuel: float | None) -> str:
+    """Phrase qualifiant la difficulté du projet selon le rendement NET requis."""
+    if rendement_net_annuel is None:
         return (
             "Objectif hors de portée avec l'épargne allouée sur cette durée : "
             "augmentez la mensualité, allongez l'échéance ou revoyez le montant."
         )
-    r = rendement_annuel
+    r = rendement_net_annuel
     if r <= 0.0:
         return "Objectif atteignable par la seule épargne, sans aucun rendement à aller chercher."
     if r <= 0.02:
@@ -87,16 +87,16 @@ def message_faisabilite(rendement_annuel: float | None) -> str:
     if r <= 0.10:
         return "Ambitieux : suppose une part d'actions importante et de la constance dans la durée."
     if r <= 0.15:
-        return "Difficile : le rendement requis implique un risque élevé, sans garantie de l'atteindre."
+        return "Difficile : le rendement net requis implique un risque élevé, sans garantie de l'atteindre."
     return (
-        "Très difficile : le rendement requis dépasse ce qu'un portefeuille diversifié "
+        "Très difficile : le rendement net requis dépasse ce qu'un portefeuille diversifié "
         "vise raisonnablement. Mieux vaut ajuster montant, durée ou mensualité."
     )
 
 
 # Fiscalité indicative des gains selon l'enveloppe (France). Simplification : le taux
-# est appliqué au rendement, pour donner un ordre de grandeur du net — la fiscalité
-# réelle porte sur les gains à la sortie et dépend de la situation de chacun.
+# est appliqué au rendement, pour donner un ordre de grandeur — la fiscalité réelle
+# porte sur les gains à la sortie et dépend de la situation de chacun.
 _ENVELOPPES = [
     ("Livret A / LDDS", 0.0),
     ("PEA (après 5 ans)", 0.172),
@@ -104,29 +104,35 @@ _ENVELOPPES = [
     ("Compte-titres (flat tax)", 0.30),
 ]
 
-NOTE_RENDEMENT_NET = (
-    "Rendements nets indicatifs : le taux brut requis est diminué de la fiscalité des "
-    "gains propre à chaque enveloppe. Estimation d'ordre de grandeur, la fiscalité réelle "
-    "s'applique aux gains à la sortie et dépend de votre situation."
+NOTE_RENDEMENT_BRUT = (
+    "L'objectif est calculé sur un rendement NET (celui qui capitalise réellement). "
+    "Les valeurs par enveloppe indiquent le rendement BRUT à viser pour obtenir ce net "
+    "une fois la fiscalité des gains déduite. Estimation d'ordre de grandeur : la "
+    "fiscalité réelle s'applique aux gains à la sortie et dépend de votre situation."
 )
 
 
 @dataclass(frozen=True)
-class RendementNetEnveloppe:
+class RendementBrutEnveloppe:
     enveloppe: str
     taux_imposition: float
-    rendement_net_indicatif: float
+    rendement_brut_indicatif: float
 
 
-def nets_par_enveloppe(rendement_brut_annuel: float) -> list[RendementNetEnveloppe]:
-    return [
-        RendementNetEnveloppe(
-            enveloppe=nom,
-            taux_imposition=taux,
-            rendement_net_indicatif=round(rendement_brut_annuel * (1 - taux), 4),
+def bruts_par_enveloppe(rendement_net_annuel: float) -> list[RendementBrutEnveloppe]:
+    """Rendement BRUT à viser dans chaque enveloppe pour obtenir le net requis :
+    brut = net / (1 - impôt sur les gains)."""
+    resultats = []
+    for nom, taux in _ENVELOPPES:
+        brut = rendement_net_annuel / (1 - taux) if taux < 1 else rendement_net_annuel
+        resultats.append(
+            RendementBrutEnveloppe(
+                enveloppe=nom,
+                taux_imposition=taux,
+                rendement_brut_indicatif=round(brut, 4),
+            )
         )
-        for nom, taux in _ENVELOPPES
-    ]
+    return resultats
 
 
 @dataclass(frozen=True)
