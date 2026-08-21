@@ -7,7 +7,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import CurrentUser
-from app.auth.schemas import LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from app.auth.password_reset import demander_reinitialisation, reinitialiser_mot_de_passe
+from app.auth.schemas import (
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
+    LoginRequest,
+    RegisterRequest,
+    ResetPasswordRequest,
+    TokenResponse,
+    UserResponse,
+)
 from app.auth.security import create_access_token, hash_password, verify_password
 from app.db.models import User
 from app.db.session import get_db
@@ -47,3 +56,25 @@ def login(payload: LoginRequest, db: DbSession) -> TokenResponse:
 @router.get("/me", response_model=UserResponse)
 def read_current_user(current_user: CurrentUser) -> User:
     return current_user
+
+
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+def forgot_password(payload: ForgotPasswordRequest, db: DbSession) -> ForgotPasswordResponse:
+    """Demande de réinitialisation. Répond toujours par un message générique (ne révèle
+    pas si l'email existe). En développement, renvoie le jeton pour tester sans e-mail."""
+    return demander_reinitialisation(db, payload.email)
+
+
+@router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+def reset_password(payload: ResetPasswordRequest, db: DbSession) -> None:
+    """Définit un nouveau mot de passe à partir d'un jeton valide (usage unique)."""
+    reinitialiser_mot_de_passe(db, payload.token, payload.new_password)
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_current_user(current_user: CurrentUser, db: DbSession) -> None:
+    """Supprime définitivement le compte et toutes les données associées (RGPD).
+    La cascade ORM efface profil, revenus, charges, catégories, dépenses, objectifs,
+    simulations et abonnements."""
+    db.delete(current_user)
+    db.commit()

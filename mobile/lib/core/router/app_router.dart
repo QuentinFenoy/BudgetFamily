@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/application/auth_state.dart';
+import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
+import '../../features/auth/presentation/reset_password_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/onboarding/presentation/onboarding_screen.dart';
 import '../../features/portfolio/presentation/allocation_screen.dart';
@@ -36,7 +38,10 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final authState = ref.read(authControllerProvider);
       final location = state.matchedLocation;
-      final isAuthRoute = location == '/login' || location == '/register';
+      final isAuthRoute = location == '/login' ||
+          location == '/register' ||
+          location == '/forgot-password' ||
+          location == '/reset-password';
 
       if (authState.status == AuthStatus.unknown) {
         return location == '/splash' ? null : '/splash';
@@ -53,6 +58,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/register', builder: (context, state) => const RegisterScreen()),
+      GoRoute(path: '/forgot-password', builder: (context, state) => const ForgotPasswordScreen()),
+      GoRoute(
+        path: '/reset-password',
+        builder: (context, state) => ResetPasswordScreen(initialToken: state.extra as String?),
+      ),
       GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
       GoRoute(path: '/onboarding', builder: (context, state) => const OnboardingScreen()),
       GoRoute(path: '/profile/edit', builder: (context, state) => const EditProfileScreen()),

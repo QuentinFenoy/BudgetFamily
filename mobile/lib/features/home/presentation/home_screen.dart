@@ -9,6 +9,34 @@ import '../../dashboard/application/dashboard_providers.dart';
 import '../../dashboard/data/dashboard_models.dart';
 import '../../expenses/presentation/add_expense_sheet.dart';
 
+Future<void> _confirmerSuppressionCompte(BuildContext context, WidgetRef ref) async {
+  final confirme = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Supprimer mon compte ?'),
+      content: const Text(
+        'Cette action est définitive. Toutes vos données (profil, budget, objectifs) '
+        'seront supprimées et ne pourront pas être récupérées.',
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Colors.red),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Supprimer'),
+        ),
+      ],
+    ),
+  );
+  if (confirme != true) return;
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    await ref.read(authControllerProvider.notifier).deleteAccount();
+  } catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text('Échec de la suppression : $e')));
+  }
+}
+
 /// Écran principal : affiche le tableau de bord budgétaire du mois courant,
 /// premier appel API authentifié réel (GET /v1/dashboard).
 class HomeScreen extends ConsumerWidget {
@@ -35,7 +63,13 @@ class HomeScreen extends ConsumerWidget {
           if (dashboard.hasValue)
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert),
-              onSelected: (route) => context.push('/$route'),
+              onSelected: (value) {
+                if (value == 'delete-account') {
+                  _confirmerSuppressionCompte(context, ref);
+                } else {
+                  context.push('/$value');
+                }
+              },
               itemBuilder: (_) => const [
                 PopupMenuItem(
                   value: 'reports',
@@ -67,6 +101,14 @@ class HomeScreen extends ConsumerWidget {
                     Icon(Icons.edit_outlined),
                     SizedBox(width: 12),
                     Text('Modifier le profil'),
+                  ]),
+                ),
+                PopupMenuItem(
+                  value: 'delete-account',
+                  child: Row(children: [
+                    Icon(Icons.delete_outline, color: Colors.red),
+                    SizedBox(width: 12),
+                    Text('Supprimer mon compte', style: TextStyle(color: Colors.red)),
                   ]),
                 ),
               ],

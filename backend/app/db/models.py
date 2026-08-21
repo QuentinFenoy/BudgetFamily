@@ -77,6 +77,9 @@ class User(Base):
     savings_goals: Mapped[list["SavingsGoal"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", order_by="SavingsGoal.priorite"
     )
+    password_reset_tokens: Mapped[list["PasswordResetToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Profile(Base):
@@ -248,3 +251,26 @@ class AllocationSimulation(Base):
 
     user: Mapped["User"] = relationship(back_populates="allocation_simulations")
     goal: Mapped["SavingsGoal | None"] = relationship(back_populates="allocation_simulations")
+
+
+class PasswordResetToken(Base):
+    """Jeton de réinitialisation de mot de passe (usage unique, expirant).
+
+    On ne stocke qu'un HASH du jeton : le jeton en clair n'existe que le temps de
+    l'e-mail, une fuite de la base ne permet donc pas de réinitialiser un mot de passe.
+    """
+
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used: Mapped[bool] = mapped_column(default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="password_reset_tokens")

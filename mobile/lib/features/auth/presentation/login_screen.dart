@@ -15,6 +15,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _rememberMe = true;
 
   @override
   void dispose() {
@@ -28,6 +29,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     await ref.read(authControllerProvider.notifier).login(
           email: _emailController.text.trim(),
           password: _passwordController.text,
+          rememberMe: _rememberMe,
         );
   }
 
@@ -86,6 +88,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         }
                         return null;
                       },
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: _rememberMe,
+                          onChanged: (v) => setState(() => _rememberMe = v ?? true),
+                        ),
+                        const Expanded(child: Text('Rester connecté')),
+                        TextButton(
+                          onPressed: authState.isLoading
+                              ? null
+                              : () => context.push('/forgot-password'),
+                          child: const Text('Mot de passe oublié ?'),
+                        ),
+                      ],
                     ),
                     if (authState.errorMessage != null) ...[
                       const SizedBox(height: 16),

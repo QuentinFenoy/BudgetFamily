@@ -18,7 +18,7 @@ class _FakeTokenStorage extends TokenStorage {
   Future<String?> readToken() async => null;
 
   @override
-  Future<void> saveToken(String token) async {}
+  Future<void> saveToken(String token, {bool persist = true}) async {}
 
   @override
   Future<void> clearToken() async {}

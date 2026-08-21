@@ -57,11 +57,15 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> login({required String email, required String password}) async {
+  Future<void> login({
+    required String email,
+    required String password,
+    bool rememberMe = true,
+  }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final token = await repository.login(email: email, password: password);
-      await tokenStorage.saveToken(token.accessToken);
+      await tokenStorage.saveToken(token.accessToken, persist: rememberMe);
       final user = await repository.fetchCurrentUser();
       state = state.copyWith(status: AuthStatus.authenticated, user: user, isLoading: false);
     } on ApiException catch (error) {
@@ -70,6 +74,14 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    await tokenStorage.clearToken();
+    state = const AuthState(status: AuthStatus.unauthenticated);
+  }
+
+  /// Supprime définitivement le compte côté serveur, puis efface le token local et
+  /// bascule en non-connecté (le router redirige alors vers /login).
+  Future<void> deleteAccount() async {
+    await repository.deleteAccount();
     await tokenStorage.clearToken();
     state = const AuthState(status: AuthStatus.unauthenticated);
   }

@@ -27,3 +27,19 @@ class UserResponse(BaseModel):
     email: EmailStr
     subscription_tier: str
     created_at: datetime
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str
+    # Renseigné en DÉVELOPPEMENT uniquement (permet de tester sans e-mail).
+    # En production, il n'est jamais renvoyé.
+    reset_token: str | None = None
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8, max_length=128)
