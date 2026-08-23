@@ -57,8 +57,10 @@ def demander_reinitialisation(db: Session, email: str) -> ForgotPasswordResponse
         db.commit()
         envoyer_email_reinitialisation(user.email, jeton_clair)
 
-    # En production : message générique, jamais le jeton ni l'existence du compte.
-    if settings.environment == "production":
+    # Le jeton n'est renvoyé dans la réponse qu'en dernier recours : en développement
+    # ET sans SMTP configuré (pour tester sans e-mail). Dès que l'e-mail est actif, ou
+    # en production, il n'est jamais exposé — il est délivré par e-mail.
+    if settings.environment == "production" or settings.emails_actives:
         return ForgotPasswordResponse(message=_MESSAGE_GENERIQUE)
     return ForgotPasswordResponse(message=_MESSAGE_GENERIQUE, reset_token=jeton_clair)
 

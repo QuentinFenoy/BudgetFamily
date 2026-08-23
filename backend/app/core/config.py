@@ -34,7 +34,22 @@ class Settings(BaseSettings):
     # (Stripe-Signature, mécanisme d'auth webhook de RevenueCat, etc.).
     billing_webhook_secret: str = _DEV_WEBHOOK_SECRET
 
+    # --- E-mails transactionnels (réinitialisation de mot de passe) ---
+    # Vide = envoi désactivé : en dev, le jeton est alors renvoyé dans la réponse.
+    # En prod, renseigner un fournisseur SMTP (Brevo, Mailtrap, SMTP2GO, SES…).
+    smtp_host: str = ""
+    smtp_port: int = 587  # 587 = STARTTLS, 465 = SSL implicite
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""  # adresse expéditeur (ex. no-reply@votredomaine.fr)
+    smtp_from_name: str = "BudgetFamily"
+
     model_config = SettingsConfigDict(env_file=".env")
+
+    @property
+    def emails_actives(self) -> bool:
+        """Vrai si un SMTP est configuré (hôte + expéditeur + utilisateur)."""
+        return bool(self.smtp_host and self.smtp_from and self.smtp_user)
 
     @field_validator("database_url")
     @classmethod
